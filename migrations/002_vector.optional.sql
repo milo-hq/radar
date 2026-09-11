@@ -1,0 +1,3 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE evidence_embeddings(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),raw_document_id uuid NOT NULL REFERENCES raw_documents(id),model text NOT NULL,dimensions integer NOT NULL CHECK(dimensions=1536),content_hash text NOT NULL,prompt_version text NOT NULL,embedding vector(1536) NOT NULL,UNIQUE(raw_document_id,model,content_hash,prompt_version));
+COMMENT ON TABLE evidence_embeddings IS 'Reserved retrieval storage. Do not populate until extraction quality is manually approved. Exact cosine retrieval initially; semantic judge decides JOIN/CREATE/RELATED.';

@@ -1,0 +1,49 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: radar
+      POSTGRES_DB: radar
+    volumes:
+      - radar_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U radar -d radar]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: .
+    command: npm run db:migrate
+    environment:
+      DATABASE_URL: postgresql://radar:radar@db:5432/radar
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build: .
+    ports:
+      - 127.0.0.1:4317:4317
+    environment:
+      DATABASE_URL: postgresql://radar:radar@db:5432/radar
+      HOST: 0.0.0.0
+      PORT: 4317
+      REDDIT_ACCESS_TOKEN: ${REDDIT_ACCESS_TOKEN:-}
+      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-VentureRadar/0.1}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  worker:
+    build: .
+    command: npm run worker
+    environment:
+      DATABASE_URL: postgresql://radar:radar@db:5432/radar
+      REDDIT_ACCESS_TOKEN: ${REDDIT_ACCESS_TOKEN:-}
+      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-VentureRadar/0.1}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+volumes:
+  radar_pg:
