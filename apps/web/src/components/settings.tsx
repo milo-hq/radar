@@ -11,6 +11,7 @@ export function Settings({
   revision: number;
   notice: (m: string) => void;
 }) {
+  const [translationState, setTranslationState] = useState<any>(null);
   const [profile, setProfile] = useState<Record<string, string> | null>(null),
     [sources, setSources] = useState<any[]>([]),
     [error, setError] = useState(""),
@@ -21,6 +22,9 @@ export function Settings({
       .catch((e) => setError(e.message));
   }, []);
   useEffect(() => {
+    api("/translation-config")
+      .then(setTranslationState)
+      .catch((e) => setError(e.message));
     api("/sources")
       .then((d) => setSources(d.items))
       .catch((e) => setError(e.message));
@@ -78,6 +82,19 @@ export function Settings({
       <div>
         <section className="panel connection-panel">
           <h2>连接状态</h2>
+          <div className="connection-row">
+            <div>
+              <strong>中文阅读助手</strong>
+              <small>
+                {translationState?.configured
+                  ? translationState.model
+                  : "在 .env 配置 TRANSLATION_API_KEY / MODEL / BASE_URL"}
+              </small>
+            </div>
+            <Badge tone={translationState?.configured ? "green" : "neutral"}>
+              {translationState?.configured ? "可用" : "待配置"}
+            </Badge>
+          </div>
           {[
             {
               name: "PostgreSQL",

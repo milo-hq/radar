@@ -1546,3 +1546,160 @@ label.checkbox input {
     font-size: 18px;
   }
 }
+.chinese-reader {
+  padding-top: 20px;
+}
+.translation-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #7d9180;
+  font-size: 10px;
+}
+.translation-meta > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.translation-meta small {
+  font-size: 9px;
+  color: #9da7ae;
+}
+.chinese-title {
+  font-size: 18px;
+  line-height: 1.6;
+  margin: 18px 0 10px;
+}
+.translation-disclaimer {
+  font-size: 10px;
+  line-height: 1.8;
+  color: #8e9b8b;
+  background: #f2f6ef;
+  padding: 12px;
+  border-radius: 6px;
+}
+.chinese-points {
+  border: 1px solid #e7ece3;
+  background: #fcfdfb;
+  border-radius: 8px;
+  padding: 18px;
+  margin: 20px 0;
+}
+.chinese-points > h3,
+.translated-heading > h3 {
+  font-size: 12px;
+  font-weight: 600;
+}
+.chinese-point {
+  display: flex;
+  gap: 12px;
+  margin-top: 17px;
+}
+.chinese-point > span {
+  color: #9baf8e;
+  font-size: 10px;
+  margin-top: 3px;
+}
+.chinese-point > div {
+  min-width: 0;
+}
+.chinese-point p {
+  font-size: 12px;
+  line-height: 1.85;
+  color: #62765c;
+}
+.chinese-point details {
+  font-size: 10px;
+  color: #98a391;
+  margin-top: 7px;
+}
+.chinese-point summary {
+  cursor: pointer;
+}
+.chinese-point blockquote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+  padding: 10px;
+  border-left: 2px solid #d9e3d1;
+  color: #889683;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.translated-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+}
+.translated-body {
+  font-size: 13px;
+  line-height: 2.1;
+  max-height: none;
+}
+.translation-empty {
+  text-align: center;
+  padding: 20px 0;
+}
+.translation-empty > h3 {
+  font-size: 15px;
+  font-weight: 500;
+}
+.translation-empty > p {
+  font-size: 11px;
+  color: #96a1ac;
+  line-height: 1.9;
+  max-width: 430px;
+  margin: 15px auto 20px;
+}
+.translation-empty > .text-button {
+  margin-top: 22px;
+}
+.translation-progress {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: #7f9770;
+  font-size: 11px;
+  margin: 20px 0;
+}
+.translation-setup {
+  text-align: left;
+  background: #f7f8fa;
+  border: 1px solid #e7ebef;
+  border-radius: 7px;
+  padding: 17px;
+  margin-top: 20px;
+  color: #83919e;
+}
+.translation-setup strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+.translation-setup p {
+  font-size: 10px;
+  line-height: 1.8;
+  margin-top: 9px;
+}
+.translation-setup pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.9;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e9edf0;
+  border-radius: 5px;
+}
+.translation-setup small {
+  font-size: 9px;
+}
+.tabs {
+  gap: 17px;
+  flex-wrap: wrap;
+}
+.translation-empty .alert {
+  margin-top: 15px;
+}

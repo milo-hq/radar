@@ -33,6 +33,7 @@ export function DocumentList({
                     : "MANUAL"}
               </Badge>
               <small>{d.type.toUpperCase()}</small>
+              {d.title_zh && <Badge tone="green">AI 中文</Badge>}
               {d.review_status === "accepted" && (
                 <Badge tone="green">已接受</Badge>
               )}
@@ -40,8 +41,8 @@ export function DocumentList({
                 <Badge tone="amber">已排除</Badge>
               )}
             </span>
-            <strong>{d.title || d.excerpt?.slice(0, 100)}</strong>
-            <span className="excerpt">{d.excerpt}</span>
+            <strong>{d.title_zh || d.title || d.excerpt?.slice(0, 100)}</strong>
+            <span className="excerpt">{d.excerpt_zh || d.excerpt}</span>
             <small>
               {new URL(d.canonical_url).hostname} <b>·</b> 采集于{" "}
               {when(d.collected_at)}

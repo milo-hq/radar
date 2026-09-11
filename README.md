@@ -32,7 +32,7 @@ npm run dev
 - Postgres 不可变原文快照、复制内容分组、独立人工检查记录。
 - 产品候选按 domain 合并；不会把定价自动认作收入，未验证字段显示 UNKNOWN。
 - Postgres 租约队列、竞争领取、fencing token、幂等快照、指数退避与定期来源。
-- Founder 配置持久化；LLM 接口、禁用 provider、版本化 prompt 基础契约与 model_runs 审计。
+- Founder 配置持久化；LLM 接口、中文阅读用兼容 API provider、版本化 prompt 与 model_runs 审计；上层研究仍禁用。
 - Docker Compose 和可选 pgvector 迁移。
 
 ## 使用
@@ -68,6 +68,10 @@ npx playwright test
 
 默认测试 URL 是 `postgresql://radar@127.0.0.1:55432/radar_test`，可用 `TEST_DATABASE_URL` 覆盖。测试库保留测试快照，便于检查不可变性；不应指向真实市场库。
 
+## 中文译文与关键信息
+
+证据详情默认打开「中文译文与要点」。填写 `.env` 中 `TRANSLATION_API_KEY`、`TRANSLATION_MODEL`、`TRANSLATION_BASE_URL` 后重启 API/Worker，即可按需生成。原文不变，译文缓存，中文要点附原文摘录。详见 [中文阅读助手配置](docs/chinese-reading.md)。
+
 ## 架构与边界
 
 - [技术架构](docs/superpowers/specs/2026-09-11-venture-radar-design.md)
@@ -75,7 +79,7 @@ npx playwright test
 - [产品需求参考](docs/product-reference.md)
 - [验证记录](docs/verification.md)
 
-Problems / Opportunities / Graveyard 显示明确的未启用门禁。痛点抽取、语义聚类、SEO 评分、收入证据录入/审核、机会生成、Deep Research、Bull/Bear/Judge、Validation Plan 和 KILL 流程尚未完成。prompt 仅基础契约，不能作为已完成的角色实现。模型 adapter 不自动读取其他应用的凭据或调用付费模型。
+Problems / Opportunities / Graveyard 显示明确的未启用门禁。痛点抽取、语义聚类、SEO 评分、收入证据录入/审核、机会生成、Deep Research、Bull/Bear/Judge、Validation Plan 和 KILL 流程尚未完成。除中文阅读 prompt 外，研究角色 prompt 仅基础契约，不能作为已完成的角色实现。模型 adapter 不自动读取其他应用的凭据，翻译只在用户请求后调用所配置的模型。
 
 下一阶段需补齐真实来源规模并由 founder 审核输入质量：M1 为 200 个真实产品、500 条市场原文（包含 Reddit）。随后才推进上层智能。数据库中的 revenue_signals / model_runs / vector 表不代表对应产品流程已交付。
 

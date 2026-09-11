@@ -1,3 +1,4 @@
+import { ChineseReader } from "./chinese-reader";
 import { Check, ExternalLink, Link2, ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, when } from "../api";
@@ -17,7 +18,7 @@ export function EvidenceDrawer({
     [doc, setDoc] = useState<any>(null),
     [error, setError] = useState(""),
     [note, setNote] = useState(""),
-    [tab, setTab] = useState("body"),
+    [tab, setTab] = useState("chinese"),
     [busy, setBusy] = useState(false);
   useEffect(() => {
     ref.current?.showModal();
@@ -26,7 +27,7 @@ export function EvidenceDrawer({
     let active = true;
     setDoc(null);
     setError("");
-    setTab("body");
+    setTab("chinese");
     api("/documents/" + id)
       .then((d) => {
         if (active) {
@@ -126,6 +127,12 @@ export function EvidenceDrawer({
           </div>
           <div className="tabs">
             <button
+              className={tab === "chinese" ? "selected" : ""}
+              onClick={() => setTab("chinese")}
+            >
+              中文译文与要点
+            </button>
+            <button
               className={tab === "body" ? "selected" : ""}
               onClick={() => setTab("body")}
             >
@@ -144,7 +151,9 @@ export function EvidenceDrawer({
               原始 Payload
             </button>
           </div>
-          {tab === "body" ? (
+          {tab === "chinese" ? (
+            <ChineseReader key={id} id={id} onOriginal={() => setTab("body")} />
+          ) : tab === "body" ? (
             <pre className="source-body">{doc.body}</pre>
           ) : tab === "payload" ? (
             <pre className="payload-body">

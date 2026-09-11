@@ -1,3 +1,8 @@
+import {
+  translationConfig,
+  CompatibleProvider,
+} from "../../../packages/llm/src/compatible.js";
+import { translateDocument } from "../../../packages/translation/src/translate.js";
 import "dotenv/config";
 import { setTimeout as delay } from "node:timers/promises";
 import { pool, transaction } from "../../../packages/db/src/index.js";
@@ -29,6 +34,24 @@ while (!stop) {
       continue;
     }
     try {
+      if (job.type === "TRANSLATE_DOCUMENT") {
+        const config = translationConfig();
+        if (!config) throw new Error("尚未配置中文翻译模型");
+        await translateDocument(pool, job.payload.documentId, {
+          provider: new CompatibleProvider(config),
+          model: config.model,
+          checkLease: async () =>
+            !!(
+              await pool.query(
+                "UPDATE jobs SET locked_until=now()+interval '120 seconds' WHERE id=$1 AND lock_token=$2 AND status='running' AND locked_until>now()",
+                [job.id, job.lock_token],
+              )
+            ).rowCount,
+        });
+        if (!(await finishJob(pool, job))) throw new Error("翻译任务租约失效");
+        console.log(`Completed Chinese translation ${job.id}`);
+        continue;
+      }
       const { source, url, name } = job.payload;
       const connector =
         source === "reddit"

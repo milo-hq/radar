@@ -1,3 +1,4 @@
+import { registerTranslations } from "./translations.js";
 import Fastify from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -54,13 +55,11 @@ export async function buildApp(db: Pool) {
       /allowed|Expected|requires|required|invalid|Reddit|Source|URL/i.test(
         e.message,
       );
-    reply
-      .code(clientError ? 400 : (e.statusCode ?? 500))
-      .send({
-        error: clientError
-          ? safeError(e)
-          : "Request failed; check the server or database connection",
-      });
+    reply.code(clientError ? 400 : (e.statusCode ?? 500)).send({
+      error: clientError
+        ? safeError(e)
+        : "Request failed; check the server or database connection",
+    });
     if (!clientError) console.error(safeError(e));
   });
   app.get("/api/health", async () => {
@@ -100,12 +99,12 @@ export async function buildApp(db: Pool) {
       .parse(req.query);
     const params = [`%${q.search}%`, q.source, q.offset];
     const result = await db.query(
-      `SELECT d.id,d.source_id,d.external_id,d.canonical_url,d.type,d.title,left(d.body,260) excerpt,d.author_name,d.thread_external_id,d.parent_external_id,d.published_at,d.collected_at,d.normalized_content_hash,d.metadata->>'subreddit' subreddit,d.metadata->>'contextComplete' context_complete,coalesce(r.status,'pending') review_status FROM raw_documents d LEFT JOIN document_reviews r ON r.raw_document_id=d.id WHERE (d.title ILIKE $1 OR d.body ILIKE $1) AND ($2='all' OR d.source_id=$2) ORDER BY d.collected_at DESC,d.id LIMIT 50 OFFSET $3`,
+      `SELECT d.id,d.source_id,d.external_id,d.canonical_url,d.type,d.title,t.result->>'titleZh' title_zh,left(t.result->>'bodyZh',260) excerpt_zh,left(d.body,260) excerpt,d.author_name,d.thread_external_id,d.parent_external_id,d.published_at,d.collected_at,d.normalized_content_hash,d.metadata->>'subreddit' subreddit,d.metadata->>'contextComplete' context_complete,coalesce(r.status,'pending') review_status FROM raw_documents d LEFT JOIN document_translations t ON t.raw_document_id=d.id AND t.prompt_version='v1' LEFT JOIN document_reviews r ON r.raw_document_id=d.id WHERE (d.title ILIKE $1 OR d.body ILIKE $1 OR t.result->>'titleZh' ILIKE $1 OR t.result->>'bodyZh' ILIKE $1) AND ($2='all' OR d.source_id=$2) ORDER BY d.collected_at DESC,d.id LIMIT 50 OFFSET $3`,
       params,
     );
     const count = (
       await db.query(
-        "SELECT count(*)::int n FROM raw_documents WHERE (title ILIKE $1 OR body ILIKE $1) AND ($2='all' OR source_id=$2)",
+        `SELECT count(*)::int n FROM raw_documents d LEFT JOIN document_translations t ON t.raw_document_id=d.id AND t.prompt_version='v1' WHERE (d.title ILIKE $1 OR d.body ILIKE $1 OR t.result->>'titleZh' ILIKE $1 OR t.result->>'bodyZh' ILIKE $1) AND ($2='all' OR d.source_id=$2)`,
         params.slice(0, 2),
       )
     ).rows[0].n;
@@ -252,5 +251,6 @@ export async function buildApp(db: Pool) {
       )
     ).rows,
   }));
+  registerTranslations(app, db);
   return app;
 }
