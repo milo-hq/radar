@@ -12,6 +12,12 @@ def run(rows):
 
 
 class AnalyticsTests(unittest.TestCase):
+    def test_product_copy_is_not_pain_or_payment_evidence(self):
+        row = dict(doc(1, 'expensive pricing pay manual spreadsheet broken'), metadata={'pageKind': 'product'})
+        cluster = run([row])['clusters'][0]
+        for field in ('painMentions', 'commercialMentions', 'frictionMentions'):
+            self.assertEqual(cluster[field], 0)
+
     def test_empty(self):
         self.assertEqual(run([])['clusterCount'], 0)
         with self.assertRaises(ValueError):

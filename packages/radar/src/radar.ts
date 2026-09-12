@@ -1,4 +1,8 @@
-import { analyzeDocuments, extractionBatches } from "./data-engine.js";
+import {
+  analyzeDocuments,
+  extractionBatches,
+  crawlerSites,
+} from "./data-engine.js";
 import { publishReviewedReport } from "./quality.js";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
@@ -74,7 +78,10 @@ export function sourceLines(docs: any[]) {
         documentId: d.id,
         title: d.title,
         url: d.canonical_url,
-        source: d.source_id,
+        source:
+          d.source_id === "web"
+            ? (d.metadata?.sourceHost ?? "web")
+            : d.source_id,
         author: d.author_name,
         authorExternalId:
           d.source_id === "wordpress" ? null : d.author_external_id,
@@ -231,7 +238,10 @@ export async function runRadarJob(
   job: Job,
   provider: LLMProvider,
   model: string,
-  engine: { analyze?: typeof analyzeDocuments } = {},
+  engine: {
+    analyze?: typeof analyzeDocuments;
+    sites?: typeof crawlerSites;
+  } = {},
 ) {
   if (
     !(
@@ -292,7 +302,34 @@ export async function runRadarJob(
       },
       planSchema,
     );
+    if (
+      !(
+        await db.query(
+          "UPDATE jobs SET locked_until=now()+interval '120 seconds' WHERE id=$1 AND lock_token=$2 AND status='running' AND locked_until>now()",
+          [job.id, job.lock_token],
+        )
+      ).rowCount
+    )
+      throw Error("自动发现任务租约失效");
+    const websites = (await (engine.sites ?? crawlerSites)()).filter(
+      (site) => site.enabled,
+    );
     await save(db, job, async (c) => {
+      for (const site of websites) {
+        const child = await enqueue(
+          c,
+          "DISCOVER_TOPIC",
+          {
+            scanId: job.payload.scanId,
+            source: "web",
+            siteId: site.id,
+            query: site.name,
+            name: `网页爬取 · ${site.name}`,
+          },
+          `radar-crawl:${job.payload.scanId}:${site.id}`,
+        );
+        await c.query("UPDATE jobs SET max_attempts=2 WHERE id=$1", [child.id]);
+      }
       for (const q of value.queries)
         for (const source of [
           "hn",
@@ -318,7 +355,7 @@ export async function runRadarJob(
         }
       await c.query(
         "UPDATE radar_scans SET status='collecting',plan=$2,updated_at=now() WHERE id=$1",
-        [job.payload.scanId, JSON.stringify(value)],
+        [job.payload.scanId, JSON.stringify({ ...value, websites })],
       );
     });
     return;
@@ -359,6 +396,8 @@ export async function runRadarJob(
             state: d.metadata.state,
             isAnswered: d.metadata.isAnswered,
             contextNote: d.metadata.contextNote,
+            pageKind: d.metadata.pageKind,
+            sourceHost: d.metadata.sourceHost,
           },
           truncated: d.body.length > 4000,
         })),
@@ -366,11 +405,20 @@ export async function runRadarJob(
       },
       schema,
     );
-    const findings = value.findings.map((f, index) => ({
-      ...f,
-      id: `${job.id}:${index}`,
-      evidence: lines[f.sourceLine],
-    }));
+    const productIds = new Set(
+      docs
+        .filter((d) =>
+          ["product", "product_directory"].includes(d.metadata?.pageKind),
+        )
+        .map((d) => d.id),
+    );
+    const findings = value.findings
+      .filter((f) => !productIds.has(lines[f.sourceLine].documentId))
+      .map((f, index) => ({
+        ...f,
+        id: `${job.id}:${index}`,
+        evidence: lines[f.sourceLine],
+      }));
     await save(db, job, async (c) => {
       await c.query(
         "INSERT INTO radar_batches(job_id,scan_id,result) VALUES($1,$2,$3)",

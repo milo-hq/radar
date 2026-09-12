@@ -1783,3 +1783,16 @@
 .ws-radar-data-details[open] > summary {
   margin-bottom: 14px;
 }
+
+.ws-radar-source-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border, #e3e8e4);
+  overflow-wrap: anywhere;
+}
+.ws-radar-source-row > strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.ws-radar-source-row p {
+  margin: 6px 0;
+}

@@ -440,3 +440,69 @@ test("Python evidence dashboard works before model report and remains usable on 
   ).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test("crawler coverage shows actual site outcomes on mobile", async ({
+  page,
+}) => {
+  await page.route("**/api/crawler", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        sites: [
+          {
+            id: "demo",
+            name: "Demo Community",
+            seed: "https://example.com/",
+            kind: "community",
+            enabled: true,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/radar", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        latest: {
+          id: "crawl",
+          status: "collecting",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          plan: null,
+          coverage: null,
+          report: null,
+          error: null,
+          jobs: [
+            {
+              type: "DISCOVER_TOPIC",
+              status: "succeeded",
+              last_error: null,
+              payload: {
+                siteId: "demo",
+                savedCount: 8,
+                crawlStats: {
+                  visited: 12,
+                  rendered: 1,
+                  cached: 0,
+                  blocked: 0,
+                  remaining: 24,
+                },
+              },
+            },
+          ],
+        },
+        previous: null,
+      },
+    }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByText("网页爬虫 · 1 个站点 · 查看实际采集进度").click();
+  await expect(page.getByText(/访问 12 页 · 入库 8 篇/)).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});

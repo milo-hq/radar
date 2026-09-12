@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   analyzeDocuments,
   collectReviews,
+  crawlSite,
+  crawlerSites,
   extractionBatches,
 } from "../packages/radar/src/data-engine.js";
 const rows = [
@@ -147,4 +149,67 @@ test("long-document fingerprints preserve distinct tails and WordPress display n
     assert.equal(doc.authorId, null);
     return new Response(JSON.stringify(output));
   }) as typeof fetch);
+});
+
+test("crawler catalog uses GET and batches preserve replay identity and provenance", async () => {
+  const site = {
+    id: "demo",
+    name: "Demo",
+    seed: "https://example.com/",
+    kind: "community",
+    enabled: true,
+  };
+  assert.equal(
+    (
+      await crawlerSites((async (_url, init) => {
+        assert.equal(init?.method, "GET");
+        return new Response(JSON.stringify({ sites: [site] }));
+      }) as typeof fetch)
+    )[0].id,
+    "demo",
+  );
+  const result = {
+    documents: [
+      {
+        sourceKey: "web",
+        externalId: "https://example.com/t/1",
+        canonicalUrl: "https://example.com/t/1",
+        type: "post",
+        body: "Actual discussion",
+        metadata: { pageKind: "community" },
+      },
+    ],
+    cooldownSeconds: 0,
+    quotaRemaining: null,
+    errors: [],
+    applications: 0,
+    stats: {
+      siteId: "demo",
+      siteName: "Demo",
+      visited: 1,
+      discovered: 2,
+      rendered: 0,
+      cached: 0,
+      blocked: 0,
+      remaining: 1,
+    },
+  };
+  await crawlSite("demo", "job-1", (async (_url, init) => {
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      siteId: "demo",
+      replayKey: "job-1",
+    });
+    return new Response(JSON.stringify(result));
+  }) as typeof fetch);
+  await assert.rejects(crawlSite("wrong", "job-1", respond(result)));
+  await assert.rejects(
+    crawlSite(
+      "demo",
+      "job-1",
+      respond({
+        ...result,
+        documents: [{ ...result.documents[0], sourceKey: "hn" }],
+      }),
+    ),
+  );
 });

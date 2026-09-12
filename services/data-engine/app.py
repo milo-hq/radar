@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse
 from analytics import analyze
 from models import AnalyzeRequest
 from collectors import router
+from web_crawler import router as crawler_router
 
 MAX_REQUEST_BYTES = 48 * 1024 * 1024
 
@@ -45,6 +46,7 @@ class BoundedBody:
 app = FastAPI(title='Radar data engine', version='1', docs_url=None, redoc_url=None)
 app.add_middleware(BoundedBody)
 app.include_router(router)
+app.include_router(crawler_router)
 analysis_lock = threading.Lock()
 
 @app.get('/health')

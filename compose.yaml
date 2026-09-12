@@ -41,6 +41,9 @@ services:
     restart: unless-stopped
   data-engine:
     build: ./services/data-engine
+    shm_size: 1gb
+    volumes:
+      - crawler_state:/state
     restart: unless-stopped
   worker:
     build: .
@@ -62,3 +65,4 @@ services:
     restart: unless-stopped
 volumes:
   radar_pg:
+  crawler_state:

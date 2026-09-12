@@ -15,6 +15,7 @@ export function SourceCoverage({ summary }: { summary: any }) {
     stackoverflow: "Stack Overflow",
     appstore: "App Store 用户评论",
     wordpress: "WordPress 插件评价",
+    web: "网页爬取",
     manual: "手动网页",
     reddit: "Reddit",
   };

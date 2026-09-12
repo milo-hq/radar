@@ -10,6 +10,7 @@ export const rawDocumentSchema = z.object({
     "stackoverflow",
     "appstore",
     "wordpress",
+    "web",
   ]),
   externalId: z.string().min(1).max(1000),
   canonicalUrl: z.url(),

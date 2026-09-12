@@ -49,7 +49,7 @@ async function request(
   let response: Response;
   try {
     response = await transport(base + path, {
-      method: "POST",
+      method: input === undefined ? "GET" : "POST",
       redirect: "error",
       signal: AbortSignal.timeout(60000),
       headers: { "Content-Type": "application/json" },
@@ -81,13 +81,15 @@ async function request(
 export async function analyzeDocuments(rows: any[], transport?: typeof fetch) {
   const documents = rows.map((d) => ({
     id: d.id,
-    source: d.source_id,
+    source:
+      d.source_id === "web" ? (d.metadata?.sourceHost ?? "web") : d.source_id,
     externalId: d.external_id,
     title: d.title ?? "",
     body: d.body.slice(0, 40000),
     authorId: d.source_id === "wordpress" ? null : d.author_external_id,
     publishedAt: d.published_at ? new Date(d.published_at).toISOString() : null,
     metadata: {
+      pageKind: d.metadata?.pageKind,
       rating: d.metadata?.rating,
       country: d.metadata?.country,
       productId: d.metadata?.productId,
@@ -137,4 +139,48 @@ export function extractionBatches(analytics: Analytics, size = 30) {
   for (let i = 0; i < ids.length; i += size)
     batches.push(ids.slice(i, i + size));
   return batches;
+}
+
+export const crawlerSiteSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  seed: z.url(),
+  kind: z.string(),
+  enabled: z.boolean(),
+});
+export async function crawlerSites(transport?: typeof fetch) {
+  return z
+    .object({ sites: z.array(crawlerSiteSchema).max(30) })
+    .parse(await request("/crawl/sites", undefined, transport)).sites;
+}
+export async function crawlSite(
+  siteId: string,
+  replayKey: string,
+  transport?: typeof fetch,
+) {
+  const result = z
+    .object({
+      documents: z.array(rawDocumentSchema).max(12),
+      cooldownSeconds: z.number().nonnegative(),
+      quotaRemaining: z.number().nullable(),
+      errors: z.array(z.string()),
+      applications: z.number().nonnegative(),
+      stats: z.object({
+        siteId: z.string(),
+        siteName: z.string(),
+        visited: z.number().nonnegative(),
+        discovered: z.number().nonnegative(),
+        rendered: z.number().nonnegative(),
+        cached: z.number().nonnegative(),
+        blocked: z.number().nonnegative(),
+        remaining: z.number().nonnegative(),
+      }),
+    })
+    .parse(await request("/crawl", { siteId, replayKey }, transport));
+  if (
+    result.stats.siteId !== siteId ||
+    result.documents.some((d) => d.sourceKey !== "web")
+  )
+    throw Error("爬虫返回了不匹配的站点或来源");
+  return result;
 }

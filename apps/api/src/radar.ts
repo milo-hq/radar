@@ -1,3 +1,4 @@
+import { crawlerSites } from "../../../packages/radar/src/data-engine.js";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { startScan } from "../../../packages/radar/src/radar.js";
@@ -10,6 +11,15 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
       return false;
     }
   };
+  app.get("/api/crawler", async (_r, reply) => {
+    try {
+      return { configured: true, sites: await crawlerSites() };
+    } catch {
+      return reply
+        .code(503)
+        .send({ configured: false, sites: [], error: "爬虫服务暂不可用" });
+    }
+  });
   app.get("/api/radar", async () => {
     const latest =
       (

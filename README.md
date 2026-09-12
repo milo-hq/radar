@@ -109,3 +109,13 @@ npx playwright test
 尚未实现全网搜索、持续定时扫描、实际访谈/付费实验执行与结果跟踪。现有模型通过项目配置调用，不读取其他应用凭据。
 
 本版仅本机内部使用，没有身份系统；不要直接改为公网暴露。
+
+### 网页爬虫
+
+自动发现现在会在原有 HN、GitHub Issues、Stack Overflow、App Store、WordPress 搜索之外，自动调度 8 个网页站点：n8n 社区、Obsidian 论坛、Discourse Meta、Frappe 论坛、OpenAlternative、Launching Next、n8n 官网、Plausible 官网。不需要填写主题。
+
+Python 使用 Playwright 1.62.0（Chromium 动态渲染）和 Trafilatura 2.2.0（正文提取），优先请求 HTML，正文不足时才尝试浏览器。每站每轮最多访问 12 页、40 秒，使用 robots.txt、至少 1 秒页面间隔和失败退避；不绕过登录、验证码或访问限制。限定站点和路径，社区列表只发现链接，不充当讨论证据。官网、目录材料保留类型，不能成为需求发现的直接证据，关键词统计不将其视为痛点或付费意图。
+
+Docker 的 `crawler_state` 卷保存 SQLite 链接队列、条件请求缓存和任务重放结果。后续扫描继续尚未访问的页面，缓存默认 6 小时后重新验证。网页全文保持原文，并记录 URL、站点、提取方式与内容指纹；作者和时间无法确认时保持未知。网页面板显示每站访问、入库、渲染、缓存、受限与待访问数量。
+
+内部接口：`GET /crawl/sites`、`POST /crawl`（`siteId`、`replayKey`）；前端目录接口 `GET /api/crawler`。扩展站点配置位于 `services/data-engine/crawl_sites.py`，新增前需验证 robots、列表和详情正文。当前是 8 个经过验证的站点增量采集，并非全网覆盖；目录内容或定价表也可能提取不完整。

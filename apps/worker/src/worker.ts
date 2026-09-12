@@ -1,4 +1,7 @@
-import { collectReviews } from "../../../packages/radar/src/data-engine.js";
+import {
+  collectReviews,
+  crawlSite,
+} from "../../../packages/radar/src/data-engine.js";
 import {
   advanceScans,
   runRadarJob,
@@ -58,7 +61,8 @@ while (!stop) {
       }
       if (job.type === "DISCOVER_TOPIC") {
         const { source, query } = job.payload;
-        const cooldown = await reserveDiscoverySlot(pool, source);
+        const cooldown =
+          source === "web" ? null : await reserveDiscoverySlot(pool, source);
         if (cooldown) {
           await pool.query(
             "UPDATE jobs SET status='pending',attempts=attempts-1,run_at=$3,locked_until=null,lock_token=null WHERE id=$1 AND lock_token=$2 AND status='running' AND locked_until>now()",
@@ -67,9 +71,12 @@ while (!stop) {
           continue;
         }
         try {
-          const result = ["appstore", "wordpress"].includes(source)
-            ? await collectReviews(source, query)
-            : await discoverTopic(source, query);
+          const result =
+            source === "web"
+              ? await crawlSite(job.payload.siteId, job.id)
+              : ["appstore", "wordpress"].includes(source)
+                ? await collectReviews(source, query)
+                : await discoverTopic(source, query);
           await transaction(pool, async (c) => {
             if (!(await finishJob(c, job))) throw Error("主题采集租约失效");
             const before = (
@@ -99,6 +106,7 @@ while (!stop) {
                   matchedCount: rows.length,
                   quotaRemaining: result.quotaRemaining,
                   warnings: "errors" in result ? result.errors : [],
+                  crawlStats: "stats" in result ? result.stats : undefined,
                 }),
               ],
             );

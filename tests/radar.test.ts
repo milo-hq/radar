@@ -147,7 +147,7 @@ const recommendation = (findingIds: string[]) => ({
   findingIds,
 });
 
-test("concurrent scan starts share one plan; planning creates all 20 distinct collection jobs", async () => {
+test("concurrent scan starts share one plan; planning creates 20 searches and one job per enabled website", async () => {
   const ids = await Promise.all(Array.from({ length: 8 }, () => startScan(db)));
   assert.equal(new Set(ids).size, 1);
   const id = ids[0];
@@ -159,13 +159,24 @@ test("concurrent scan starts share one plan; planning creates all 20 distinct co
     await claimed(planned[0]),
     provider(() => plan),
     model,
+    {
+      sites: async () => [
+        {
+          id: "test_site",
+          name: "Test community",
+          seed: "https://example.com/",
+          kind: "community",
+          enabled: true,
+        },
+      ],
+    },
   );
   assert.equal((await state(id)).status, "collecting");
   const children = await jobs(id, "DISCOVER_TOPIC");
-  assert.equal(children.length, 20);
+  assert.equal(children.length, 21);
   assert.equal(
     new Set(children.map((j) => `${j.payload.source}:${j.payload.query}`)).size,
-    20,
+    21,
   );
   for (const source of [
     "hn",
@@ -175,7 +186,15 @@ test("concurrent scan starts share one plan; planning creates all 20 distinct co
     "wordpress",
   ])
     assert.equal(children.filter((j) => j.payload.source === source).length, 4);
-  assert.ok(children.every((j) => j.max_attempts === 1));
+  assert.ok(
+    children.every(
+      (j) => j.max_attempts === (j.payload.source === "web" ? 2 : 1),
+    ),
+  );
+  assert.equal(
+    children.find((j) => j.payload.source === "web").payload.siteId,
+    "test_site",
+  );
   assert.equal(await startScan(db), id);
 });
 

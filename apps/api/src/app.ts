@@ -118,6 +118,7 @@ export async function buildApp(db: Pool) {
             "stackoverflow",
             "appstore",
             "wordpress",
+            "web",
           ])
           .default("all"),
         offset: z.coerce.number().int().min(0).default(0),

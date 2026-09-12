@@ -155,6 +155,34 @@ export function WorkspaceRadar({
   openDocument: (id: string) => void;
   openSettings: () => void;
 }) {
+  const [crawler, setCrawler] = useState<{
+    sites: {
+      id: string;
+      name: string;
+      seed: string;
+      kind: string;
+      enabled: boolean;
+    }[];
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api<{
+      sites: {
+        id: string;
+        name: string;
+        seed: string;
+        kind: string;
+        enabled: boolean;
+      }[];
+    }>("/crawler")
+      .then((value) => {
+        if (alive) setCrawler(value);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [data, setData] = useState<RadarState | null>(null);
   const [previousReport, setPreviousReport] = useState<Scan | null>(null);
   const [error, setError] = useState("");
@@ -268,6 +296,85 @@ export function WorkspaceRadar({
           </div>
         </section>
       )}
+      {crawler && (
+        <details className="ws-panel ws-radar-plan">
+          <summary>
+            网页爬虫 · {crawler.sites.filter((s) => s.enabled).length} 个站点 ·
+            查看实际采集进度
+          </summary>
+          <p className="ws-muted">
+            自动发现站内详情页，提取正文；必要时运行浏览器。每站每轮最多访问 12
+            页，后续扫描继续未访问页面。产品介绍用于了解竞品，不直接作为用户痛点证据。
+          </p>
+          {crawler.sites
+            .filter((s) => s.enabled)
+            .map((site) => {
+              const job = scan?.jobs.find(
+                (j) =>
+                  (j.payload as { siteId?: string } | null)?.siteId === site.id,
+              );
+              const payload = job?.payload as
+                | {
+                    savedCount?: number;
+                    crawlStats?: {
+                      visited: number;
+                      rendered: number;
+                      cached: number;
+                      blocked: number;
+                      remaining: number;
+                    };
+                  }
+                | undefined;
+              const stats = payload?.crawlStats;
+              const state = !job
+                ? "等待下一轮扫描"
+                : ({
+                    pending: "待采集",
+                    running: "采集中",
+                    completed: "完成",
+                    succeeded: "完成",
+                    failed: "失败",
+                    queued: "排队中",
+                  }[job.status] ?? job.status);
+              return (
+                <div className="ws-radar-source-row" key={site.id}>
+                  <strong>
+                    <a
+                      href={safeUrl(site.seed)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {site.name}
+                    </a>
+                  </strong>
+                  <span className="ws-muted">
+                    {site.kind === "community"
+                      ? "用户社区"
+                      : site.kind === "product_directory"
+                        ? "产品目录"
+                        : "产品官网"}{" "}
+                    · {state}
+                  </span>
+                  {stats && (
+                    <p className="ws-muted">
+                      访问 {stats.visited} 页 · 入库 {payload?.savedCount ?? 0}{" "}
+                      篇 · 浏览器渲染 {stats.rendered} 页 · 缓存 {stats.cached}{" "}
+                      篇 · 受限 {stats.blocked} 页 · 待访问 {stats.remaining} 页
+                    </p>
+                  )}
+                  {job?.last_error && (
+                    <p className="ws-warning">{job.last_error}</p>
+                  )}
+                  {jobWarnings(job?.payload).map((warning, index) => (
+                    <p className="ws-warning" key={index}>
+                      {warning}
+                    </p>
+                  ))}
+                </div>
+              );
+            })}
+        </details>
+      )}
       {scan && (
         <section className="ws-panel">
           <div className="ws-section-title">
@@ -342,7 +449,7 @@ export function WorkspaceRadar({
               <p className="ws-muted">
                 检索渠道包括 HN、GitHub Issues、Stack Overflow、App Store 与
                 WordPress
-                插件评论。各渠道可能没有返回材料，实际采集量以下方数字为准。
+                插件评论，以及用户社区、产品目录和官网网页爬取。各渠道可能没有返回材料，实际采集量以下方数字为准。
                 模型提取每篇前 4000
                 字符，可能缺少完整后续讨论；搜索命中不等于需求成立。
               </p>

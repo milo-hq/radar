@@ -110,7 +110,7 @@ def analyze(request: AnalyzeRequest):
             dates.append(min(copy_dates) if all(d is not None and d <= as_of for d in copy_dates) else None)
         valid = [d for d in dates if d is not None]
         recent = sum(0 <= (as_of - d).total_seconds() <= 30 * 86400 for d in valid)
-        rows = [{name: bool(re.search(pattern, content_text[content][:MAX_TEXT])) for name, pattern in KEYWORDS.items()} for content in contents]
+        rows = [{name: (not any(d.metadata.get('pageKind') in ('product', 'product_directory') for d in grouped[content]) and bool(re.search(pattern, content_text[content][:MAX_TEXT]))) for name, pattern in KEYWORDS.items()} for content in contents]
         sums = pl.DataFrame(rows).select(pl.all().sum()).to_dicts()[0]
         size = len(contents)
         dimensions = {
