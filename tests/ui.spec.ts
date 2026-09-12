@@ -77,7 +77,7 @@ test("source inspection, search, review persistence and mobile navigation", asyn
   await expect(page.getByRole("button", { name: "查看参考产品", exact: true }))
     .toBeVisible()
     .catch(async () => {
-      await expect(page.locator(".ws-opportunity-card").first()).toBeVisible();
+      await expect(page.getByRole("table", { name: "机会列表" })).toBeVisible();
     });
   expect(
     await page.evaluate(
@@ -237,7 +237,8 @@ test("opportunity evidence review unlocks validation and preserves the decision"
   }
   await page.goto("/");
   await page.getByRole("button", { name: /^机会工作台/ }).click();
-  await page.getByRole("heading", { name: title, exact: true }).click();
+  await page.getByLabel("搜索机会").fill(title);
+  await page.getByRole("button", { name: title, exact: true }).click();
   await expect(page.getByText("继续补证，暂存为草稿")).toBeVisible();
   await page
     .locator(".ws-claim")
@@ -337,8 +338,9 @@ test("radar starts without a topic and renders ranked evidence on mobile", async
   await expect(
     page.getByRole("button", { name: "自动发现机会", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".ws-radar input")).toHaveCount(0);
+  await expect(page.getByLabel("搜索发现历史")).toBeVisible();
   await page.getByRole("button", { name: "自动发现机会", exact: true }).click();
+  await page.getByRole("button", { name: "查看分析", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "客户资料交接检查助手" }),
   ).toBeVisible();
@@ -551,6 +553,7 @@ test("historical radar selection survives polling and empty rounds never borrow 
           opportunity_count: s.report ? 0 : null,
         })),
         hasMore: false,
+        total: 3,
       },
     }),
   );
@@ -563,16 +566,18 @@ test("historical radar selection survives polling and empty rounds never borrow 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page
-    .locator(".ws-radar-history-item")
+    .getByRole("row")
     .filter({ hasText: "2026/08/01" })
+    .getByRole("button")
     .click();
   await expect(page.getByText(old.report.summary)).toBeVisible();
   await page.waitForTimeout(5500);
   await expect(page.getByText(old.report.summary)).toBeVisible();
   await expect(page.getByText(latest.report.summary)).toHaveCount(0);
   await page
-    .locator(".ws-radar-history-item")
+    .getByRole("row")
     .filter({ hasText: "2026/08/02" })
+    .getByRole("button")
     .click();
   await expect(page.getByText("测试失败轮次")).toBeVisible();
   await expect(page.getByText(old.report.summary)).toHaveCount(0);

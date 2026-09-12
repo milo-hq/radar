@@ -1,3 +1,12 @@
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "./ui/table";
+import { Button } from "./ui/button";
 import { useEffect, useState } from "react";
 import { api, when } from "../api";
 const dimensions = [
@@ -92,7 +101,8 @@ export function WorkspaceComparison({
               对全部未放弃草稿做同一标准的横向评估。结果是模型估计，需结合原文核对。
             </p>
           </div>
-          <button
+          <Button
+            variant="outline"
             className="button primary"
             disabled={
               busy ||
@@ -119,7 +129,7 @@ export function WorkspaceComparison({
                 : latest
                   ? "重新评估全部机会"
                   : "评估全部机会"}
-          </button>
+          </Button>
         </div>
         {error && (
           <p className="alert" role="alert">
@@ -148,25 +158,25 @@ export function WorkspaceComparison({
                 : "评估时间：" + when(latest.created_at)}
             </p>
             <div className="ws-comparison-scroll">
-              <table className="ws-comparison-table">
-                <thead>
-                  <tr>
-                    <th>暂定验证顺序</th>
+              <Table className="ws-comparison-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>暂定验证顺序</TableHead>
                     {dimensions.map(([key, label, weight]) => (
-                      <th key={key}>
+                      <TableHead key={key}>
                         {label}
                         <small>{weight}</small>
-                      </th>
+                      </TableHead>
                     ))}
-                    <th>证据与下一步</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    <TableHead>证据与下一步</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {latest.result.items.map((o: any, i: number) => {
                     const original = opportunities.find((p) => p.id === o.id);
                     return (
-                      <tr key={o.id}>
-                        <td>
+                      <TableRow key={o.id}>
+                        <TableCell>
                           <span className="ws-tag">
                             {latest.stale
                               ? "排序已过期"
@@ -178,24 +188,25 @@ export function WorkspaceComparison({
                                     : "信息不足"
                                 : `#${latest.result.items.findIndex((item: any) => item.score === o.score) + 1} · 预估 ${o.score}/5`}
                           </span>
-                          <button
+                          <Button
+                            variant="outline"
                             className="ws-text"
                             onClick={() => openOpportunity(o.id)}
                           >
                             {original?.title ?? "机会已移除"}
-                          </button>
+                          </Button>
                           <small>已知权重 {o.coverage}%</small>
-                        </td>
+                        </TableCell>
                         {dimensions.map(([key]) => (
-                          <td key={key}>
+                          <TableCell key={key}>
                             <strong>
                               {o[key].score ?? "未知"}
                               {o[key].score != null && <small>/5</small>}
                             </strong>
                             <p>{o[key].reason}</p>
-                          </td>
+                          </TableCell>
                         ))}
-                        <td>
+                        <TableCell>
                           <span className="ws-tag">
                             已核对痛点 {o.acceptedPain} · 商业{" "}
                             {o.acceptedCommercial}
@@ -220,18 +231,19 @@ export function WorkspaceComparison({
                             <b>建议验证：</b>
                             {o.nextStep}
                           </p>
-                          <button
+                          <Button
+                            variant="outline"
                             className="ws-text"
                             onClick={() => openOpportunity(o.id)}
                           >
                             打开方案与证据 →
-                          </button>
-                        </td>
-                      </tr>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </>
         )}

@@ -119,3 +119,14 @@ Python 使用 Playwright 1.62.0（Chromium 动态渲染）和 Trafilatura 2.2.0�
 Docker 的 `crawler_state` 卷保存 SQLite 链接队列、条件请求缓存和任务重放结果。后续扫描继续尚未访问的页面，缓存默认 6 小时后重新验证。网页全文保持原文，并记录 URL、站点、提取方式与内容指纹；作者和时间无法确认时保持未知。网页面板显示每站访问、入库、渲染、缓存、受限与待访问数量。
 
 内部接口：`GET /crawl/sites`、`POST /crawl`（`siteId`、`replayKey`）；前端目录接口 `GET /api/crawler`。扩展站点配置位于 `services/data-engine/crawl_sites.py`，新增前需验证 robots、列表和详情正文。当前是 8 个经过验证的站点增量采集，并非全网覆盖；目录内容或定价表也可能提取不完整。
+
+### shadcn 管理工作台
+
+前端采用官方 shadcn/ui 组件（Radix 基础组件）、Tailwind CSS v4 和 TanStack Table v8。`components.json` 定义组件目录，`apps/web/src/components/ui` 保存可维护源码；共享 `DataTable` 支持排序、分页、页大小调整，并保持后台刷新时所在页。主题在 `shadcn.css` / `admin.css`，旧业务布局暂保留在 legacy CSS layer 以保护复杂档案与证据流程。
+
+- 自动发现历史：服务端分页、编号/报告摘要/机会标题搜索、状态筛选、时间排序、总数与10/20/50页大小；按轮次查看分析。
+- 机会、发现结果、自定义搜索、参考产品、采集活动和原文：标准表格与详情操作。除历史外，表格分页作用于现有接口加载的数据；不会把局部数据伪称全库搜索。原文库外层仍使用现有服务端检索。
+- 导入与证据检查使用 shadcn Dialog；中文翻译、来源审查、机会声明、验证决策、产品研究与创始人设置保留。
+- 设置、机会详情、自定义搜索按需加载。移动端表格局部横向滚动。
+
+组件参考：[shadcn Vite 安装](https://ui.shadcn.com/docs/installation/vite)、[Data Table](https://ui.shadcn.com/docs/components/radix/data-table)。执行 `npm run build && npx playwright test` 验证核心业务、历史筛选、分页刷新与移动端。

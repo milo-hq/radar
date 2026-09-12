@@ -1,3 +1,14 @@
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { Badge } from "./primitives";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 import { useEffect, useState } from "react";
 import { ArrowRight, FileText, Plus, Search, Sparkles } from "lucide-react";
 import { api, when } from "../api";
@@ -27,6 +38,16 @@ export function WorkspaceProducts({
     [sourceMarket, setSourceMarket] = useState("美国"),
     [targetMarket, setTargetMarket] = useState("中东"),
     [attach, setAttach] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const filtered = products.filter((product) =>
+    [product.name, product.domain, product.url]
+      .join(" ")
+      .toLocaleLowerCase()
+      .includes(search.trim().toLocaleLowerCase()),
+  );
+  const pages = Math.max(1, Math.ceil(filtered.length / 10));
+  const currentPage = Math.min(page, pages - 1);
   async function act(key: string, action: () => Promise<unknown>) {
     setBusy(key);
     setError("");
@@ -46,16 +67,13 @@ export function WorkspaceProducts({
           将官网、评论、论坛讨论和收入来源放在一起研究
         </p>
         <div className="ws-inline">
-          <button className="button" onClick={importSource}>
+          <Button variant="outline" size="sm" onClick={importSource}>
             导入网页
-          </button>
-          <button
-            className="button primary"
-            onClick={() => setCreating(!creating)}
-          >
+          </Button>
+          <Button size="sm" onClick={() => setCreating(!creating)}>
             <Plus size={16} />
             手动添加产品
-          </button>
+          </Button>
         </div>
       </div>
       {error && (
@@ -103,7 +121,7 @@ export function WorkspaceProducts({
           <div className="ws-fields">
             <label>
               产品名称
-              <input
+              <Input
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -112,7 +130,7 @@ export function WorkspaceProducts({
             </label>
             <label>
               官网地址
-              <input
+              <Input
                 type="url"
                 required
                 value={url}
@@ -125,210 +143,308 @@ export function WorkspaceProducts({
             这里只建立产品档案。使用「导入网页」采集正文，再将材料关联到产品。
           </p>
           <div className="ws-inline">
-            <button className="button primary" disabled={!!busy}>
+            <Button size="sm" disabled={!!busy}>
               创建产品
-            </button>
-            <button
-              className="button"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => setCreating(false)}
             >
               取消
-            </button>
+            </Button>
           </div>
         </form>
       )}
-      <div className="ws-product-grid">
-        {products.map((p) => {
-          const pending = jobs.find(
-            (j) =>
-              j.type === "ANALYZE_PRODUCT" &&
-              j.payload?.productId === p.id &&
-              ["pending", "running"].includes(j.status),
-          );
-          const discovery = jobs.find(
-            (j) =>
-              j.type === "DISCOVER_FEEDBACK" &&
-              j.payload?.productId === p.id &&
-              ["pending", "running"].includes(j.status),
-          );
-          return (
-            <article className="ws-panel ws-product" key={p.id}>
-              <div className="ws-inline">
-                <span className="ws-product-mark">{p.name.slice(0, 1)}</span>
-                <div>
-                  <h2>{p.name}</h2>
-                  <span className="ws-muted">
-                    {p.domain || p.url || "手动参考产品"}
-                  </span>
-                </div>
-              </div>
-              <div className="ws-section-title">
-                <h3>
-                  研究材料{" "}
-                  <span className="ws-muted">{p.documents?.length || 0}</span>
-                </h3>
-                <button
-                  className="ws-text"
-                  onClick={() => setAttach(attach === p.id ? null : p.id)}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <Input
+          className="max-w-sm"
+          aria-label="搜索参考产品"
+          placeholder="搜索已加载产品…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(0);
+          }}
+        />
+        <span className="text-xs text-muted-foreground">
+          已加载 {products.length} 个产品 · 匹配 {filtered.length} 个
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-md border bg-background">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>参考产品</TableHead>
+              <TableHead>研究材料</TableHead>
+              <TableHead>操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered
+              .slice(currentPage * 10, (currentPage + 1) * 10)
+              .map((p) => {
+                const pending = jobs.find(
+                  (j) =>
+                    j.type === "ANALYZE_PRODUCT" &&
+                    j.payload?.productId === p.id &&
+                    ["pending", "running"].includes(j.status),
+                );
+                const discovery = jobs.find(
+                  (j) =>
+                    j.type === "DISCOVER_FEEDBACK" &&
+                    j.payload?.productId === p.id &&
+                    ["pending", "running"].includes(j.status),
+                );
+                return (
+                  <TableRow key={p.id} className="align-top">
+                    <TableCell className="min-w-52 whitespace-normal">
+                      <div className="ws-inline">
+                        <div>
+                          <h2 className="text-sm font-medium">{p.name}</h2>
+                          <span className="ws-muted">
+                            {p.domain || p.url || "手动参考产品"}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="min-w-64 max-w-md whitespace-normal">
+                      <div className="ws-section-title">
+                        <h3>
+                          研究材料{" "}
+                          <span className="ws-muted">
+                            {p.documents?.length || 0}
+                          </span>
+                        </h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setAttach(attach === p.id ? null : p.id)
+                          }
+                        >
+                          <Plus size={14} />
+                          关联原文
+                        </Button>
+                      </div>
+                      {attach === p.id && (
+                        <AttachDocument
+                          product={p}
+                          notice={notice}
+                          close={() => setAttach(null)}
+                        />
+                      )}
+                      {p.documents?.length ? (
+                        <details>
+                          <summary className="cursor-pointer text-xs text-muted-foreground">
+                            查看 {p.documents.length} 条材料
+                          </summary>
+                          <div className="ws-product-docs">
+                            {p.documents.map((d: any) => (
+                              <Button
+                                variant="ghost"
+                                className="h-auto w-full justify-start whitespace-normal text-left"
+                                key={d.id}
+                                onClick={() => openDocument(d.id)}
+                              >
+                                <FileText size={16} />
+                                <span>{d.title || d.url || "原始材料"}</span>
+                                <ArrowRight size={14} />
+                              </Button>
+                            ))}
+                          </div>
+                        </details>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          尚无研究材料。导入官网、定价页或用户讨论，再关联到这里。
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell className="min-w-80 max-w-lg whitespace-normal">
+                      {localize === p.id && (
+                        <form
+                          className="ws-form ws-localize"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void act("localize-" + p.id, async () => {
+                              await api(`/products/${p.id}/research`, {
+                                localization: { sourceMarket, targetMarket },
+                              });
+                              notice(
+                                "跨地区本地化研究已排队；结果仍需A/B证据分别核对",
+                              );
+                              setLocalize(null);
+                            });
+                          }}
+                        >
+                          <h3>跨地区本地化研究</h3>
+                          <p className="ws-muted">
+                            借鉴已验证模式，寻找当地差异。A的成功不能证明B的需求；模型不能替代当地竞品调查。
+                          </p>
+                          <div className="ws-inline">
+                            {["中东", "欧洲", "亚洲（不含中国）"].map(
+                              (region) => (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  type="button"
+                                  key={region}
+                                  onClick={() => {
+                                    setSourceMarket("美国");
+                                    setTargetMarket(region);
+                                  }}
+                                >
+                                  美国 → {region}
+                                </Button>
+                              ),
+                            )}
+                          </div>
+                          <label>
+                            来源地区 A
+                            <Input
+                              required
+                              maxLength={100}
+                              value={sourceMarket}
+                              onChange={(e) => setSourceMarket(e.target.value)}
+                            />
+                          </label>
+                          <label>
+                            目标地区 B
+                            <Input
+                              required
+                              maxLength={100}
+                              value={targetMarket}
+                              onChange={(e) => setTargetMarket(e.target.value)}
+                            />
+                          </label>
+                          <Button
+                            size="sm"
+                            disabled={
+                              !!busy ||
+                              !!pending ||
+                              !configured ||
+                              !p.documents?.length
+                            }
+                          >
+                            开始本地化研究
+                          </Button>
+                        </form>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!!busy || !!discovery}
+                          onClick={() =>
+                            void act("discover-" + p.id, async () => {
+                              await api(`/products/${p.id}/discover`, {});
+                              notice(
+                                "用户反馈发现已排队；完成后核对讨论，再发起机会研究",
+                              );
+                            })
+                          }
+                        >
+                          <Search size={15} />
+                          {discovery
+                            ? discovery.status === "running"
+                              ? "正在发现反馈…"
+                              : "反馈发现已排队"
+                            : busy === "discover-" + p.id
+                              ? "提交中…"
+                              : "发现用户反馈"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={
+                            !!busy ||
+                            !!pending ||
+                            !configured ||
+                            !p.documents?.length
+                          }
+                          onClick={() =>
+                            void act(p.id, async () => {
+                              await api(`/products/${p.id}/research`, {});
+                              notice("研究已排队，结果将出现在机会草稿中");
+                            })
+                          }
+                        >
+                          <Sparkles size={15} />
+                          {pending
+                            ? pending.status === "running"
+                              ? "正在研究…"
+                              : "研究已排队"
+                            : busy === p.id
+                              ? "提交中…"
+                              : "研究机会"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setLocalize(localize === p.id ? null : p.id)
+                          }
+                        >
+                          本地化研究
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!!busy}
+                          onClick={() =>
+                            void act("draft-" + p.id, async () => {
+                              const o = await api("/opportunities", {
+                                productId: p.id,
+                                title: p.name + " · 新机会",
+                                dossier: {},
+                              });
+                              notice("机会草稿已创建");
+                              openOpportunity(o.id);
+                            })
+                          }
+                        >
+                          手动建草稿
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            {!filtered.length && (
+              <TableRow>
+                <TableCell
+                  colSpan={3}
+                  className="h-24 text-center text-muted-foreground"
                 >
-                  <Plus size={14} />
-                  关联原文
-                </button>
-              </div>
-              {attach === p.id && (
-                <AttachDocument
-                  product={p}
-                  notice={notice}
-                  close={() => setAttach(null)}
-                />
-              )}
-              {p.documents?.length ? (
-                <div className="ws-product-docs">
-                  {p.documents.map((d: any) => (
-                    <button key={d.id} onClick={() => openDocument(d.id)}>
-                      <FileText size={16} />
-                      <span>{d.title || d.url || "原始材料"}</span>
-                      <ArrowRight size={14} />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="ws-muted ws-product-empty">
-                  尚无研究材料。导入官网、定价页或用户讨论，再关联到这里。
-                </p>
-              )}
-              {localize === p.id && (
-                <form
-                  className="ws-form ws-localize"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void act("localize-" + p.id, async () => {
-                      await api(`/products/${p.id}/research`, {
-                        localization: { sourceMarket, targetMarket },
-                      });
-                      notice("跨地区本地化研究已排队；结果仍需A/B证据分别核对");
-                      setLocalize(null);
-                    });
-                  }}
-                >
-                  <h3>跨地区本地化研究</h3>
-                  <p className="ws-muted">
-                    借鉴已验证模式，寻找当地差异。A的成功不能证明B的需求；模型不能替代当地竞品调查。
-                  </p>
-                  <div className="ws-inline">
-                    {["中东", "欧洲", "亚洲（不含中国）"].map((region) => (
-                      <button
-                        className="button"
-                        type="button"
-                        key={region}
-                        onClick={() => {
-                          setSourceMarket("美国");
-                          setTargetMarket(region);
-                        }}
-                      >
-                        美国 → {region}
-                      </button>
-                    ))}
-                  </div>
-                  <label>
-                    来源地区 A
-                    <input
-                      required
-                      maxLength={100}
-                      value={sourceMarket}
-                      onChange={(e) => setSourceMarket(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    目标地区 B
-                    <input
-                      required
-                      maxLength={100}
-                      value={targetMarket}
-                      onChange={(e) => setTargetMarket(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    className="button primary"
-                    disabled={
-                      !!busy || !!pending || !configured || !p.documents?.length
-                    }
-                  >
-                    开始本地化研究
-                  </button>
-                </form>
-              )}
-              <div className="ws-product-actions">
-                <button
-                  className="button"
-                  disabled={!!busy || !!discovery}
-                  onClick={() =>
-                    void act("discover-" + p.id, async () => {
-                      await api(`/products/${p.id}/discover`, {});
-                      notice(
-                        "用户反馈发现已排队；完成后核对讨论，再发起机会研究",
-                      );
-                    })
-                  }
-                >
-                  <Search size={15} />
-                  {discovery
-                    ? discovery.status === "running"
-                      ? "正在发现反馈…"
-                      : "反馈发现已排队"
-                    : busy === "discover-" + p.id
-                      ? "提交中…"
-                      : "发现用户反馈"}
-                </button>
-                <button
-                  className="button primary"
-                  disabled={
-                    !!busy || !!pending || !configured || !p.documents?.length
-                  }
-                  onClick={() =>
-                    void act(p.id, async () => {
-                      await api(`/products/${p.id}/research`, {});
-                      notice("研究已排队，结果将出现在机会草稿中");
-                    })
-                  }
-                >
-                  <Sparkles size={15} />
-                  {pending
-                    ? pending.status === "running"
-                      ? "正在研究…"
-                      : "研究已排队"
-                    : busy === p.id
-                      ? "提交中…"
-                      : "研究机会"}
-                </button>
-                <button
-                  className="button"
-                  onClick={() => setLocalize(localize === p.id ? null : p.id)}
-                >
-                  本地化研究
-                </button>
-                <button
-                  className="button"
-                  disabled={!!busy}
-                  onClick={() =>
-                    void act("draft-" + p.id, async () => {
-                      const o = await api("/opportunities", {
-                        productId: p.id,
-                        title: p.name + " · 新机会",
-                        dossier: {},
-                      });
-                      notice("机会草稿已创建");
-                      openOpportunity(o.id);
-                    })
-                  }
-                >
-                  手动建草稿
-                </button>
-              </div>
-            </article>
-          );
-        })}
+                  没有匹配的产品。
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          第 {currentPage + 1} / {pages} 页 · 每页 10 个已加载产品
+        </span>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 0}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            上一页
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage + 1 >= pages}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            下一页
+          </Button>
+        </div>
       </div>
       {!products.length && (
         <section className="ws-panel ws-empty">
@@ -339,10 +455,10 @@ export function WorkspaceProducts({
             <br />
             系统提出机会草稿，由你核对证据并决定是否投入。
           </p>
-          <button className="button primary" onClick={importSource}>
+          <Button size="sm" onClick={importSource}>
             <Plus size={15} />
             导入第一个产品
-          </button>
+          </Button>
         </section>
       )}
     </>
@@ -392,7 +508,7 @@ function AttachDocument({
       <label>
         <Search size={14} />
         查找原文
-        <input
+        <Input
           placeholder="搜索整个原文库…"
           value={search}
           onChange={(e) => {
@@ -404,7 +520,9 @@ function AttachDocument({
       {error && <p role="alert">{error}</p>}
       <div className="ws-attach-results">
         {docs.map((d) => (
-          <button
+          <Button
+            variant="ghost"
+            className="h-auto w-full justify-between whitespace-normal text-left"
             key={d.id}
             disabled={
               busy ||
@@ -427,29 +545,31 @@ function AttachDocument({
           >
             <span>{d.title || d.excerpt || d.canonical_url}</span>
             <Plus size={14} />
-          </button>
+          </Button>
         ))}
       </div>
       {!docs.length && <p className="ws-muted">没有匹配原文，请先导入网页。</p>}
       <div className="ws-inline">
-        <button
-          className="ws-text"
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={!offset}
           onClick={() => setOffset(offset - 50)}
         >
           上一页
-        </button>
+        </Button>
         <span>{total} 条原文</span>
-        <button
-          className="ws-text"
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={offset + 50 >= total}
           onClick={() => setOffset(offset + 50)}
         >
           下一页
-        </button>
-        <button className="ws-text" onClick={close}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={close}>
           收起
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -465,6 +585,22 @@ export function WorkspaceJobs({
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const filtered = jobs.filter((job) =>
+    [
+      job.type,
+      job.status,
+      job.payload?.name,
+      job.payload?.url,
+      products.find((product) => product.id === job.payload?.productId)?.name,
+    ]
+      .join(" ")
+      .toLocaleLowerCase()
+      .includes(search.trim().toLocaleLowerCase()),
+  );
+  const pages = Math.max(1, Math.ceil(filtered.length / 12));
+  const currentPage = Math.min(page, pages - 1);
   return (
     <section className="ws-panel ws-jobs">
       <div className="ws-section-title">
@@ -474,82 +610,148 @@ export function WorkspaceJobs({
             后台状态每 5 秒更新。反馈发现补充原文材料；机会研究生成待核对草稿。
           </p>
         </div>
-        <span className="ws-tag">实时队列</span>
+        <Badge>实时队列</Badge>
       </div>
       {error && (
         <div className="alert" role="alert">
           {error}
         </div>
       )}
-      {jobs.length ? (
-        jobs.slice(0, 12).map((j) => (
-          <div className="ws-job" key={j.id}>
-            <span className={"ws-job-dot " + j.status} />
-            <div>
-              <strong>
-                {["ANALYZE_PRODUCT", "DISCOVER_FEEDBACK"].includes(j.type)
-                  ? (j.type === "DISCOVER_FEEDBACK"
-                      ? "反馈发现 · "
-                      : "机会研究 · ") +
-                    (products.find((p) => p.id === j.payload?.productId)
-                      ?.name ||
-                      j.payload?.productId ||
-                      "")
-                  : j.payload?.name || j.payload?.url || "原文采集"}
-              </strong>
-              <small>
-                {when(j.created_at)} · 尝试 {j.attempts} / {j.max_attempts}
-              </small>
-              {j.type === "DISCOVER_FEEDBACK" && j.status === "succeeded" && (
-                <small>
-                  {typeof j.payload?.savedCount === "number"
-                    ? `已保存 ${j.payload.savedCount} 条讨论`
-                    : "反馈发现已完成"}
-                  {typeof j.payload?.queryCount === "number"
-                    ? ` · 已执行 ${j.payload.queryCount} 次检索`
-                    : ""}
-                  {" · 讨论待核对，可在产品研究材料中查看"}
-                </small>
-              )}
-              {j.last_error && <p className="ws-warning">{j.last_error}</p>}
-            </div>
-            <span className="ws-tag">
-              {(
-                {
-                  succeeded: "已完成",
-                  pending: "等待执行",
-                  running: "处理中",
-                  failed: "失败",
-                } as Record<string, string>
-              )[j.status] || j.status}
-            </span>
-            {j.status === "failed" && (
-              <button
-                className="ws-text"
-                disabled={!!busy}
-                onClick={async () => {
-                  setBusy(j.id);
-                  setError("");
-                  try {
-                    await api(`/jobs/${j.id}/retry`, {});
-                    notice("任务已重新排队");
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy("");
-                  }
-                }}
+      <Input
+        className="mb-3 max-w-sm"
+        aria-label="筛选已加载活动"
+        placeholder="筛选已加载活动…"
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setPage(0);
+        }}
+      />
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>活动</TableHead>
+            <TableHead>状态</TableHead>
+            <TableHead>操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filtered.length ? (
+            filtered
+              .slice(currentPage * 12, (currentPage + 1) * 12)
+              .map((j) => (
+                <TableRow key={j.id}>
+                  <TableCell className="whitespace-normal">
+                    <div>
+                      <strong>
+                        {["ANALYZE_PRODUCT", "DISCOVER_FEEDBACK"].includes(
+                          j.type,
+                        )
+                          ? (j.type === "DISCOVER_FEEDBACK"
+                              ? "反馈发现 · "
+                              : "机会研究 · ") +
+                            (products.find((p) => p.id === j.payload?.productId)
+                              ?.name ||
+                              j.payload?.productId ||
+                              "")
+                          : j.payload?.name || j.payload?.url || "原文采集"}
+                      </strong>
+                      <small>
+                        {when(j.created_at)} · 尝试 {j.attempts} /{" "}
+                        {j.max_attempts}
+                      </small>
+                      {j.type === "DISCOVER_FEEDBACK" &&
+                        j.status === "succeeded" && (
+                          <small>
+                            {typeof j.payload?.savedCount === "number"
+                              ? `已保存 ${j.payload.savedCount} 条讨论`
+                              : "反馈发现已完成"}
+                            {typeof j.payload?.queryCount === "number"
+                              ? ` · 已执行 ${j.payload.queryCount} 次检索`
+                              : ""}
+                            {" · 讨论待核对，可在产品研究材料中查看"}
+                          </small>
+                        )}
+                      {j.last_error && (
+                        <p className="ws-warning">{j.last_error}</p>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge>
+                      {(
+                        {
+                          succeeded: "已完成",
+                          pending: "等待执行",
+                          running: "处理中",
+                          failed: "失败",
+                        } as Record<string, string>
+                      )[j.status] || j.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {j.status === "failed" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!!busy}
+                        onClick={async () => {
+                          setBusy(j.id);
+                          setError("");
+                          try {
+                            await api(`/jobs/${j.id}/retry`, {});
+                            notice("任务已重新排队");
+                          } catch (e) {
+                            setError((e as Error).message);
+                          } finally {
+                            setBusy("");
+                          }
+                        }}
+                      >
+                        重试
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+          ) : (
+            <TableRow>
+              <TableCell
+                colSpan={3}
+                className="h-24 text-center text-muted-foreground"
               >
-                重试
-              </button>
-            )}
-          </div>
-        ))
-      ) : (
-        <p className="ws-muted">
-          暂无任务。导入来源或研究产品后，进度会显示在这里。
-        </p>
-      )}
+                {jobs.length
+                  ? "没有匹配的活动。"
+                  : "暂无任务。导入来源或研究产品后，进度会显示在这里。"}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          已加载 {jobs.length} 条 · 匹配 {filtered.length} 条 · 第{" "}
+          {currentPage + 1} / {pages} 页
+        </span>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 0}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            上一页
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage + 1 >= pages}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            下一页
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }

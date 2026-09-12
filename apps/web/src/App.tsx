@@ -1,10 +1,17 @@
+import { Input } from "./components/ui/input";
+import { Button } from "./components/ui/button";
+import { DataTable } from "./components/data-table";
 import { WorkspaceRadar } from "./WorkspaceRadar";
-import { WorkspaceDiscovery } from "./components/workspace-discovery";
+const WorkspaceDiscovery = lazy(() =>
+  import("./components/workspace-discovery").then((m) => ({
+    default: m.WorkspaceDiscovery,
+  })),
+);
 import {
   WorkspaceComparison,
   SourceCoverage,
 } from "./components/workspace-comparison";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -23,8 +30,14 @@ import { api } from "./api";
 import { DocumentList } from "./components/document-list";
 import { EvidenceDrawer } from "./components/evidence-drawer";
 import { ImportDialog } from "./components/import-dialog";
-import { Settings } from "./components/settings";
-import { WorkspaceDetail } from "./components/workspace-detail";
+const Settings = lazy(() =>
+  import("./components/settings").then((m) => ({ default: m.Settings })),
+);
+const WorkspaceDetail = lazy(() =>
+  import("./components/workspace-detail").then((m) => ({
+    default: m.WorkspaceDetail,
+  })),
+);
 import {
   WorkspaceJobs,
   WorkspaceProducts,
@@ -34,7 +47,7 @@ import {
   Status,
   type Opportunity,
 } from "./components/workspace-model";
-import "./workspace.css";
+
 const navigation = [
   { id: "radar", title: "自动发现", icon: Compass },
   { id: "opportunities", title: "机会工作台", icon: Compass },
@@ -146,7 +159,8 @@ export default function App() {
         <div className="ws-nav-caption">你的研究工作台</div>
         <nav aria-label="主导航">
           {navigation.map(({ id, title, icon: Icon }) => (
-            <button
+            <Button
+              variant="outline"
               key={id}
               className={page === id ? "active" : ""}
               onClick={() => {
@@ -157,12 +171,12 @@ export default function App() {
               <Icon size={18} />
               {title}
               {id === "opportunities" && <span>{opportunities.length}</span>}
-            </button>
+            </Button>
           ))}
         </nav>
         <div className="ws-sidebar-bottom">
           <ShieldCheck size={20} />
-          <strong>每个判断，回到证据</strong>
+          <strong>独立开发者工作台</strong>
           <p>
             先找到值得验证的切口，
             <br />
@@ -183,326 +197,345 @@ export default function App() {
             <span className="ws-connection">
               {error ? "连接异常" : summary ? "数据已同步" : "正在连接…"}
             </span>
-            <button
+            <Button
+              variant="outline"
               className="icon-button"
               aria-label="刷新工作台"
               onClick={refresh}
             >
               <RefreshCw size={16} />
-            </button>
+            </Button>
           </div>
         </header>
         <main className="ws-content">
-          {error && (
-            <div className="alert" role="alert">
-              {error}
-              <button onClick={refresh}>重试</button>
-            </div>
-          )}
-          {page === "opportunities" && opportunityId ? (
-            <WorkspaceDetail
-              key={opportunityId}
-              id={opportunityId}
-              products={products}
-              revision={revision}
-              back={() => setOpportunityId(null)}
-              openDocument={setDocumentId}
-              notice={notice}
-            />
-          ) : (
-            <>
-              {page !== "radar" && (
-                <div className="ws-page-heading">
-                  <div>
-                    <span className="ws-kicker">
-                      {page === "opportunities"
-                        ? "FROM EVIDENCE TO YOUR NEXT PRODUCT"
-                        : "INDEPENDENT FOUNDER / RESEARCH WORKSPACE"}
-                    </span>
-                    <h1>
-                      {page === "opportunities"
-                        ? "找到值得你做的下一款产品"
-                        : navigation.find((n) => n.id === page)?.title}
-                    </h1>
-                    <p>
-                      {page === "opportunities"
-                        ? "从真实产品出发，找到具体切口；用证据决定下一步。"
-                        : page === "discovery"
-                          ? "按需求主题跨渠道查找真实讨论与新项目。"
-                          : page === "comparison"
-                            ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
-                            : page === "products"
-                              ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
-                              : page === "documents"
-                                ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
-                                : "让每次机会研究考虑你的时间、能力和可承受投入。"}
-                    </p>
-                  </div>
-                  {page !== "settings" && (
-                    <button
-                      className="button primary"
-                      onClick={() => setImportOpen(true)}
-                    >
-                      <Plus size={16} />
-                      导入来源
-                    </button>
-                  )}
-                </div>
-              )}
-              {page === "radar" && (
-                <WorkspaceRadar
-                  revision={revision}
-                  openDocument={setDocumentId}
-                  openSettings={() => setPage("settings")}
-                />
-              )}
-              {page === "opportunities" && (
-                <>
-                  <div className="ws-overview">
-                    <div className="ws-overview-intro">
-                      <span className="ws-kicker">研究 → 核对 → 验证</span>
-                      <h2>
-                        少一点猜测，
-                        <br />
-                        多一个可验证的机会。
-                      </h2>
-                      <p>草稿可以保留未知。候选需要市场与需求证据。</p>
-                      <button
-                        className="ws-text"
-                        onClick={() => setPage("products")}
-                      >
-                        从参考产品开始 <ArrowRight size={15} />
-                      </button>
+          <Suspense fallback={<p role="status">正在加载页面…</p>}>
+            {error && (
+              <div className="alert" role="alert">
+                {error}
+                <Button variant="outline" onClick={refresh}>
+                  重试
+                </Button>
+              </div>
+            )}
+            {page === "opportunities" && opportunityId ? (
+              <WorkspaceDetail
+                key={opportunityId}
+                id={opportunityId}
+                products={products}
+                revision={revision}
+                back={() => setOpportunityId(null)}
+                openDocument={setDocumentId}
+                notice={notice}
+              />
+            ) : (
+              <>
+                {page !== "radar" && (
+                  <div className="ws-page-heading">
+                    <div>
+                      <span className="ws-kicker">
+                        {page === "opportunities"
+                          ? "FROM EVIDENCE TO YOUR NEXT PRODUCT"
+                          : "INDEPENDENT FOUNDER / RESEARCH WORKSPACE"}
+                      </span>
+                      <h1>
+                        {page === "opportunities"
+                          ? "机会管理"
+                          : navigation.find((n) => n.id === page)?.title}
+                      </h1>
+                      <p>
+                        {page === "opportunities"
+                          ? "从真实产品出发，找到具体切口；用证据决定下一步。"
+                          : page === "discovery"
+                            ? "按需求主题跨渠道查找真实讨论与新项目。"
+                            : page === "comparison"
+                              ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
+                              : page === "products"
+                                ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
+                                : page === "documents"
+                                  ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
+                                  : "让每次机会研究考虑你的时间、能力和可承受投入。"}
+                      </p>
                     </div>
-                    {[
-                      {
-                        key: "drafts",
-                        count: drafts.length,
-                        title: "待补证草稿",
-                        text: "研究假设，等待你核对",
-                      },
-                      {
-                        key: "ready",
-                        count: ready.length,
-                        title: "候选机会",
-                        text: "已有市场与需求证据",
-                      },
-                      {
-                        key: "killed",
-                        count: killed.length,
-                        title: "已放弃",
-                        text: "保留判断与决策理由",
-                      },
-                    ].map((s) => (
-                      <button
-                        key={s.key}
-                        className={
-                          "ws-stat " + (filter === s.key ? "active" : "")
-                        }
-                        onClick={() => setFilter(s.key)}
+                    {page !== "settings" && (
+                      <Button
+                        variant="outline"
+                        className="button primary"
+                        onClick={() => setImportOpen(true)}
                       >
-                        <strong>{summary ? s.count : "—"}</strong>
-                        <span>{s.title}</span>
-                        <small>{s.text}</small>
-                      </button>
-                    ))}
+                        <Plus size={16} />
+                        导入来源
+                      </Button>
+                    )}
                   </div>
-                  <div className="ws-list-toolbar">
-                    <div
-                      className="ws-tabs"
-                      role="tablist"
-                      aria-label="机会状态"
-                    >
-                      {[
-                        ["drafts", "草稿", drafts.length],
-                        ["ready", "候选", ready.length],
-                        ["killed", "已放弃", killed.length],
-                      ].map(([key, label, count]) => (
-                        <button
-                          key={key}
-                          role="tab"
-                          aria-selected={filter === key}
-                          className={filter === key ? "active" : ""}
-                          onClick={() => setFilter(String(key))}
+                )}
+                {page === "radar" && (
+                  <WorkspaceRadar
+                    revision={revision}
+                    openDocument={setDocumentId}
+                    openSettings={() => setPage("settings")}
+                  />
+                )}
+                {page === "opportunities" && (
+                  <>
+                    <div className="ws-overview">
+                      <div className="ws-overview-intro">
+                        <span className="ws-kicker">研究 → 核对 → 验证</span>
+                        <h2>
+                          少一点猜测，
+                          <br />
+                          多一个可验证的机会。
+                        </h2>
+                        <p>草稿可以保留未知。候选需要市场与需求证据。</p>
+                        <Button
+                          variant="outline"
+                          className="ws-text"
+                          onClick={() => setPage("products")}
                         >
-                          {label}
-                          <span>{count}</span>
-                        </button>
+                          从参考产品开始 <ArrowRight size={15} />
+                        </Button>
+                      </div>
+                      {[
+                        {
+                          key: "drafts",
+                          count: drafts.length,
+                          title: "待补证草稿",
+                          text: "研究假设，等待你核对",
+                        },
+                        {
+                          key: "ready",
+                          count: ready.length,
+                          title: "候选机会",
+                          text: "已有市场与需求证据",
+                        },
+                        {
+                          key: "killed",
+                          count: killed.length,
+                          title: "已放弃",
+                          text: "保留判断与决策理由",
+                        },
+                      ].map((s) => (
+                        <Button
+                          variant="outline"
+                          key={s.key}
+                          className={
+                            "ws-stat " + (filter === s.key ? "active" : "")
+                          }
+                          onClick={() => setFilter(s.key)}
+                        >
+                          <strong>{summary ? s.count : "—"}</strong>
+                          <span>{s.title}</span>
+                          <small>{s.text}</small>
+                        </Button>
                       ))}
                     </div>
-                    <label className="ws-search">
-                      <Search size={16} />
-                      <input
-                        aria-label="搜索机会"
-                        placeholder="搜索机会或目标人群"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <label className="ws-type-filter">
-                    机会类型
-                    <select
-                      value={opportunityType}
-                      onChange={(e) => setOpportunityType(e.target.value)}
-                    >
-                      <option value="all">全部类型</option>
-                      <option value="workflow">工作流机会</option>
-                      <option value="localization">跨地区本地化</option>
-                    </select>
-                  </label>
-                  <div className="ws-opportunity-list">
-                    {visible.map((o) => (
-                      <button
-                        className="ws-opportunity-card"
-                        key={o.id}
-                        onClick={() => openOpportunity(o.id)}
+                    <div className="ws-list-toolbar">
+                      <div
+                        className="ws-tabs"
+                        role="tablist"
+                        aria-label="机会状态"
                       >
-                        <div className="ws-card-title">
-                          <div className="ws-inline">
-                            <Status opportunity={o} />
-                            {o.dossier.opportunityType === "localization" && (
-                              <span className="ws-tag">
-                                {o.dossier.sourceMarket} →{" "}
-                                {o.dossier.targetMarket}
-                              </span>
-                            )}
-                            <span className="ws-muted">
-                              {products.find((p) => p.id === o.product_id)
-                                ?.name || "参考产品待关联"}
-                            </span>
-                          </div>
-                          <ArrowRight size={18} />
-                        </div>
-                        <h2>{o.title}</h2>
+                        {[
+                          ["drafts", "草稿", drafts.length],
+                          ["ready", "候选", ready.length],
+                          ["killed", "已放弃", killed.length],
+                        ].map(([key, label, count]) => (
+                          <Button
+                            variant="outline"
+                            key={key}
+                            role="tab"
+                            aria-selected={filter === key}
+                            className={filter === key ? "active" : ""}
+                            onClick={() => setFilter(String(key))}
+                          >
+                            {label}
+                            <span>{count}</span>
+                          </Button>
+                        ))}
+                      </div>
+                      <label className="ws-search">
+                        <Search size={16} />
+                        <Input
+                          aria-label="搜索机会"
+                          placeholder="搜索机会或目标人群"
+                          value={query}
+                          onChange={(e) => setQuery(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label className="ws-type-filter">
+                      机会类型
+                      <select
+                        value={opportunityType}
+                        onChange={(e) => setOpportunityType(e.target.value)}
+                      >
+                        <option value="all">全部类型</option>
+                        <option value="workflow">工作流机会</option>
+                        <option value="localization">跨地区本地化</option>
+                      </select>
+                    </label>
+                    <DataTable
+                      key={`${filter}:${query}:${opportunityType}`}
+                      label="机会列表"
+                      data={visible}
+                      columns={[
+                        {
+                          accessorKey: "title",
+                          header: "机会名称",
+                          cell: ({ row }) => (
+                            <Button
+                              variant="outline"
+                              className="admin-record-link"
+                              onClick={() => openOpportunity(row.original.id)}
+                            >
+                              {row.original.title}
+                            </Button>
+                          ),
+                        },
+                        {
+                          id: "status",
+                          header: "状态",
+                          cell: ({ row }) => (
+                            <Status opportunity={row.original} />
+                          ),
+                        },
+                        {
+                          id: "buyer",
+                          header: "付费人群",
+                          accessorFn: (o) =>
+                            o.dossier?.buyer || o.dossier?.customer || "待验证",
+                        },
+                        {
+                          id: "type",
+                          header: "类型",
+                          accessorFn: (o) =>
+                            o.dossier.opportunityType === "localization"
+                              ? "跨地区本地化"
+                              : "工作流机会",
+                        },
+                        {
+                          id: "evidence",
+                          header: "已核对证据",
+                          accessorFn: (o) =>
+                            o.claims?.filter(
+                              (c) => c.review_status === "accepted",
+                            ).length || 0,
+                        },
+                        {
+                          id: "actions",
+                          header: "操作",
+                          cell: ({ row }) => (
+                            <Button
+                              variant="outline"
+                              className="button"
+                              onClick={() => openOpportunity(row.original.id)}
+                            >
+                              查看档案
+                            </Button>
+                          ),
+                        },
+                      ]}
+                    />
+                    {!visible.length && (
+                      <section className="ws-panel ws-empty">
+                        <Compass size={32} />
+                        <h2>
+                          {!summary
+                            ? "正在读取机会…"
+                            : query
+                              ? "没有匹配的机会"
+                              : filter === "ready"
+                                ? "还没有满足证据门槛的候选"
+                                : filter === "killed"
+                                  ? "还没有被放弃的机会"
+                                  : "第一个机会，从一个真实产品开始"}
+                        </h2>
                         <p>
-                          {o.dossier?.gap ||
-                            o.dossier?.offer ||
-                            "具体切口尚未明确，打开档案完善机会假设。"}
-                        </p>
-                        <div className="ws-card-facts">
-                          <span>
-                            付费人群
-                            <strong>
-                              {o.dossier?.buyer ||
-                                o.dossier?.customer ||
-                                "未知"}
-                            </strong>
-                          </span>
-                          <span>
-                            最小方案
-                            <strong>{o.dossier?.offer || "待补充"}</strong>
-                          </span>
-                          <span>
-                            证据核对
-                            <strong>
-                              {o.claims?.filter(
-                                (c) => c.review_status === "accepted",
-                              ).length || 0}{" "}
-                              已接受 / {o.claims?.length || 0} 条声明
-                            </strong>
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {!visible.length && (
-                    <section className="ws-panel ws-empty">
-                      <Compass size={32} />
-                      <h2>
-                        {!summary
-                          ? "正在读取机会…"
-                          : query
-                            ? "没有匹配的机会"
+                          {query
+                            ? "试试其他关键词。"
                             : filter === "ready"
-                              ? "还没有满足证据门槛的候选"
+                              ? "打开草稿，核对市场或收入声明与需求声明。证据齐备后自动进入候选。"
                               : filter === "killed"
-                                ? "还没有被放弃的机会"
-                                : "第一个机会，从一个真实产品开始"}
-                      </h2>
-                      <p>
-                        {query
-                          ? "试试其他关键词。"
-                          : filter === "ready"
-                            ? "打开草稿，核对市场或收入声明与需求声明。证据齐备后自动进入候选。"
-                            : filter === "killed"
-                              ? "在机会档案记录「放弃机会」，保留依据与教训。"
-                              : "导入产品官网与用户讨论，发起研究，或手动记录你的具体切口。"}
-                      </p>
-                      {!query && (
-                        <button
-                          className="button"
-                          onClick={() =>
-                            filter === "ready"
-                              ? setFilter("drafts")
-                              : setPage("products")
-                          }
-                        >
-                          {filter === "ready" ? "检查机会草稿" : "查看参考产品"}
-                          <ArrowRight size={15} />
-                        </button>
-                      )}
-                    </section>
-                  )}
-                  <WorkspaceJobs
-                    jobs={jobs}
-                    products={products}
+                                ? "在机会档案记录「放弃机会」，保留依据与教训。"
+                                : "导入产品官网与用户讨论，发起研究，或手动记录你的具体切口。"}
+                        </p>
+                        {!query && (
+                          <Button
+                            variant="outline"
+                            className="button"
+                            onClick={() =>
+                              filter === "ready"
+                                ? setFilter("drafts")
+                                : setPage("products")
+                            }
+                          >
+                            {filter === "ready"
+                              ? "检查机会草稿"
+                              : "查看参考产品"}
+                            <ArrowRight size={15} />
+                          </Button>
+                        )}
+                      </section>
+                    )}
+                    <WorkspaceJobs
+                      jobs={jobs}
+                      products={products}
+                      notice={notice}
+                    />
+                  </>
+                )}
+                {page === "discovery" && (
+                  <WorkspaceDiscovery
+                    revision={revision}
                     notice={notice}
-                  />
-                </>
-              )}
-              {page === "discovery" && (
-                <WorkspaceDiscovery
-                  revision={revision}
-                  notice={notice}
-                  openDocument={setDocumentId}
-                />
-              )}
-              {page === "comparison" && (
-                <WorkspaceComparison
-                  revision={revision}
-                  jobs={jobs}
-                  opportunities={opportunities}
-                  summary={summary}
-                  notice={notice}
-                  openOpportunity={openOpportunity}
-                />
-              )}
-              {page === "products" && (
-                <>
-                  <SourceCoverage summary={summary} />
-                  <WorkspaceProducts
-                    products={products}
-                    jobs={jobs}
-                    configured={!!summary?.researchConfigured}
                     openDocument={setDocumentId}
-                    openOpportunity={openOpportunity}
-                    notice={notice}
-                    importSource={() => setImportOpen(true)}
                   />
-                  <WorkspaceJobs
+                )}
+                {page === "comparison" && (
+                  <WorkspaceComparison
+                    revision={revision}
                     jobs={jobs}
-                    products={products}
+                    opportunities={opportunities}
+                    summary={summary}
+                    notice={notice}
+                    openOpportunity={openOpportunity}
+                  />
+                )}
+                {page === "products" && (
+                  <>
+                    <SourceCoverage summary={summary} />
+                    <WorkspaceProducts
+                      products={products}
+                      jobs={jobs}
+                      configured={!!summary?.researchConfigured}
+                      openDocument={setDocumentId}
+                      openOpportunity={openOpportunity}
+                      notice={notice}
+                      importSource={() => setImportOpen(true)}
+                    />
+                    <WorkspaceJobs
+                      jobs={jobs}
+                      products={products}
+                      notice={notice}
+                    />
+                  </>
+                )}
+                {page === "documents" && (
+                  <Documents revision={revision} openDocument={setDocumentId} />
+                )}
+                {page === "settings" && (
+                  <Settings
+                    summary={summary}
+                    revision={revision}
                     notice={notice}
                   />
-                </>
-              )}
-              {page === "documents" && (
-                <Documents revision={revision} openDocument={setDocumentId} />
-              )}
-              {page === "settings" && (
-                <Settings
-                  summary={summary}
-                  revision={revision}
-                  notice={notice}
-                />
-              )}
-            </>
-          )}
-          <footer className="ws-footer">
-            <span>机会雷达 · 为独立开发者保留证据与判断</span>
-            <span>假设保持可见，决策可以追溯</span>
-          </footer>
+                )}
+              </>
+            )}
+            <footer className="ws-footer">
+              <span>机会雷达 · 为独立开发者保留证据与判断</span>
+              <span>假设保持可见，决策可以追溯</span>
+            </footer>
+          </Suspense>
         </main>
       </div>
       {importOpen && (
@@ -570,7 +603,7 @@ function Documents({
       <div className="ws-list-toolbar">
         <label className="ws-search">
           <Search size={16} />
-          <input
+          <Input
             aria-label="搜索原始文档"
             placeholder="搜索标题或正文关键词"
             value={search}
@@ -606,22 +639,24 @@ function Documents({
         <span>
           {total ? offset + 1 : 0}–{Math.min(offset + 50, total)} / {total}
         </span>
-        <button
+        <Button
+          variant="outline"
           className="icon-button"
           aria-label="上一页"
           disabled={!offset}
           onClick={() => setOffset(offset - 50)}
         >
           <ChevronLeft size={17} />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           className="icon-button"
           aria-label="下一页"
           disabled={offset + 50 >= total}
           onClick={() => setOffset(offset + 50)}
         >
           <ChevronRight size={17} />
-        </button>
+        </Button>
       </div>
     </section>
   );

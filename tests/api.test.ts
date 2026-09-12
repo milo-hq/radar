@@ -311,3 +311,103 @@ test("radar history is paginated and old scans remain addressable", async () => 
     400,
   );
 });
+
+test("radar history validates filters and returns filtered counts with bounded pages", async () => {
+  for (const query of [
+    "limit=11",
+    "limit=100",
+    "limit=-1",
+    "offset=1.5",
+    "offset=100001",
+    "status=unknown",
+    "order=random",
+    "q=" + "x".repeat(201),
+  ]) {
+    assert.equal(
+      (await app.inject(`/api/radar/history?${query}`)).statusCode,
+      400,
+      query,
+    );
+  }
+  const marker = `history-${crypto.randomUUID()}`;
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < 23; i++) {
+      const result = await db.query(
+        "INSERT INTO radar_scans(status,created_at,report,coverage) VALUES($1,$2,$3,$4) RETURNING id",
+        [
+          i === 22 ? "failed" : "complete",
+          new Date(Date.UTC(2026, 0, 1, 0, i)),
+          JSON.stringify({
+            summary: `${marker} summary`,
+            recommendations: [{ title: `${marker} title ${i}` }],
+          }),
+          JSON.stringify({ collected: i }),
+        ],
+      );
+      ids.push(result.rows[0].id);
+    }
+    const first = await app.inject(
+      `/api/radar/history?q=${marker}&limit=10&order=asc`,
+    );
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.json().total, 23);
+    assert.equal(first.json().limit, 10);
+    assert.equal(first.json().offset, 0);
+    assert.equal(first.json().hasMore, true);
+    assert.deepEqual(
+      first.json().items.map((item: { id: string }) => item.id),
+      ids.slice(0, 10),
+    );
+    const last = await app.inject(
+      `/api/radar/history?q=${marker}&limit=10&offset=20&order=asc`,
+    );
+    assert.equal(last.json().total, 23);
+    assert.equal(last.json().hasMore, false);
+    assert.deepEqual(
+      last.json().items.map((item: { id: string }) => item.id),
+      ids.slice(20),
+    );
+    const descending = await app.inject(
+      `/api/radar/history?q=${marker}&limit=20`,
+    );
+    assert.equal(descending.json().items.length, 20);
+    assert.equal(descending.json().items[0].id, ids[22]);
+    const all = await app.inject(
+      `/api/radar/history?q=${marker}&limit=50&status=complete`,
+    );
+    assert.equal(all.json().total, 22);
+    assert.equal(all.json().items.length, 22);
+    assert.equal(all.json().hasMore, false);
+    const failed = await app.inject(
+      `/api/radar/history?q=${marker}&status=failed`,
+    );
+    assert.equal(failed.json().total, 1);
+    assert.equal(failed.json().items[0].id, ids[22]);
+    for (const q of [ids[0], `${marker} title 0`, `${marker} summary`]) {
+      const found = await app.inject(
+        `/api/radar/history?q=${encodeURIComponent(q)}&limit=50`,
+      );
+      assert.ok(
+        found.json().items.some((item: { id: string }) => item.id === ids[0]),
+        q,
+      );
+    }
+    const emptyPage = await app.inject(
+      `/api/radar/history?q=${marker}&offset=50`,
+    );
+    assert.equal(emptyPage.json().total, 23);
+    assert.deepEqual(emptyPage.json().items, []);
+    assert.equal(emptyPage.json().hasMore, false);
+    const literal = await app.inject(
+      `/api/radar/history?q=${encodeURIComponent(marker + "%")}`,
+    );
+    assert.equal(
+      literal.json().total,
+      0,
+      "Search metacharacters must remain literal",
+    );
+  } finally {
+    await db.query("DELETE FROM radar_scans WHERE id=ANY($1::uuid[])", [ids]);
+  }
+});

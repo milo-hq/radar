@@ -1,3 +1,5 @@
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 import { Database, Layers3, Pause, Play, Radio, Telescope } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api";
@@ -63,25 +65,27 @@ export function Settings({
         </p>
         {error && <div className="alert">{error}</div>}
         {profile ? (
-          Object.entries(fields).map(([key, label]) => (
-            <label key={key}>
-              {label}
-              <input
-                value={profile[key] || ""}
-                onChange={(e) =>
-                  setProfile({ ...profile, [key]: e.target.value })
-                }
-                placeholder="尚未配置"
-                maxLength={2000}
-              />
-            </label>
-          ))
+          <div className="grid gap-4 sm:grid-cols-2">
+            {Object.entries(fields).map(([key, label]) => (
+              <label key={key}>
+                {label}
+                <Input
+                  value={profile[key] || ""}
+                  onChange={(e) =>
+                    setProfile({ ...profile, [key]: e.target.value })
+                  }
+                  placeholder="尚未配置"
+                  maxLength={2000}
+                />
+              </label>
+            ))}
+          </div>
         ) : (
           <p>读取配置…</p>
         )}
-        <button className="button primary" disabled={!profile || saving}>
+        <Button size="sm" disabled={!profile || saving}>
           {saving ? "保存中…" : "保存配置"}
-        </button>
+        </Button>
       </form>
       <div>
         <section className="panel connection-panel">
@@ -150,8 +154,9 @@ export function Settings({
                     {s.enabled ? "已启用" : "已暂停"}
                   </small>
                 </div>
-                <button
-                  className="icon-button"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   aria-label={s.enabled ? "暂停采集" : "启用采集"}
                   onClick={() =>
                     api("/sources/" + s.id, { enabled: !s.enabled }, "PATCH")
@@ -162,7 +167,7 @@ export function Settings({
                   }
                 >
                   {s.enabled ? <Pause size={17} /> : <Play size={17} />}
-                </button>
+                </Button>
               </div>
             ))
           ) : (

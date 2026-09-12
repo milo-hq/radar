@@ -45,19 +45,58 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
   });
   app.get("/api/radar/history", async (request, reply) => {
     const parsed = z
-      .object({ offset: z.coerce.number().int().min(0).max(100000).default(0) })
+      .object({
+        offset: z.coerce.number().int().min(0).max(100000).default(0),
+        limit: z.coerce
+          .number()
+          .refine((n) => [10, 20, 50].includes(n))
+          .default(20),
+        q: z.string().trim().max(200).default(""),
+        status: z
+          .enum([
+            "all",
+            "planning",
+            "collecting",
+            "analyzing",
+            "reporting",
+            "complete",
+            "failed",
+          ])
+          .default("all"),
+        order: z.enum(["asc", "desc"]).default("desc"),
+      })
       .safeParse(request.query);
     if (!parsed.success)
-      return reply.code(400).send({ error: "无效的历史页码" });
-    const rows = (
-      await db.query(
+      return reply.code(400).send({ error: "无效的历史筛选或分页参数" });
+    const { offset, limit, q, status, order } = parsed.data;
+    const search = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+    const where = `WHERE ($1::text = 'all' OR status = $1)
+      AND ($2::text = '' OR id::text ILIKE $3 OR report->>'title' ILIKE $3
+        OR report->>'summary' ILIKE $3 OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(report->'recommendations', '[]'::jsonb)) AS recommendation
+          WHERE recommendation->>'title' ILIKE $3
+        ))`;
+    const direction = order === "asc" ? "ASC" : "DESC";
+    const [page, count] = await Promise.all([
+      db.query(
         `SELECT id,status,created_at,updated_at,coverage,
       CASE WHEN report IS NULL THEN NULL ELSE jsonb_array_length(COALESCE(report->'recommendations','[]'::jsonb)) END AS opportunity_count
-      FROM radar_scans ORDER BY created_at DESC,id DESC LIMIT 21 OFFSET $1`,
-        [parsed.data.offset],
-      )
-    ).rows;
-    return { items: rows.slice(0, 20), hasMore: rows.length > 20 };
+      FROM radar_scans ${where} ORDER BY created_at ${direction},id ${direction} LIMIT $4 OFFSET $5`,
+        [status, q, search, limit + 1, offset],
+      ),
+      db.query(`SELECT count(*)::int AS total FROM radar_scans ${where}`, [
+        status,
+        q,
+        search,
+      ]),
+    ]);
+    return {
+      items: page.rows.slice(0, limit),
+      hasMore: page.rows.length > limit,
+      total: count.rows[0].total,
+      offset,
+      limit,
+    };
   });
   app.get("/api/radar/history/:id", async (request, reply) => {
     const parsed = z.object({ id: z.uuid() }).safeParse(request.params);

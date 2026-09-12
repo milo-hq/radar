@@ -1,6 +1,17 @@
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "./components/ui/table";
+import { Button } from "./components/ui/button";
+import { DataTable } from "./components/data-table";
 import { RadarHistory } from "./RadarHistory";
 import { useEffect, useState } from "react";
 import {
+  Plus,
   ArrowRight,
   CheckCircle2,
   Compass,
@@ -185,6 +196,7 @@ export function WorkspaceRadar({
     };
   }, []);
   const [data, setData] = useState<RadarState | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedScan, setSelectedScan] = useState<Scan | null>(null);
   const [historyError, setHistoryError] = useState("");
@@ -255,54 +267,28 @@ export function WorkspaceRadar({
       : stages.findIndex((s) => s.id === scan?.status);
   return (
     <div className="ws-radar">
-      <section className="ws-radar-hero">
+      <section className="admin-page-toolbar">
         <div>
-          <span className="ws-kicker">AUTONOMOUS OPPORTUNITY RADAR</span>
-          <h1>
-            还没想好做什么？
-            <br />
-            先让真实需求指路。
-          </h1>
-          <p>
-            自动寻找需求信号、核对来源，再告诉你谁可能付费、值得做什么，以及第一步怎么验证。
-          </p>
-          <button
-            className="button primary"
-            disabled={!data?.configured || starting || latestRunning}
-            onClick={start}
-          >
-            {starting || latestRunning ? (
-              <Loader2 size={17} className="ws-radar-spin" />
-            ) : (
-              <Compass size={17} />
-            )}
-            {starting
-              ? "正在启动…"
-              : latestRunning
-                ? "正在自动发现…"
-                : "自动发现机会"}
-            {!latestRunning && !starting && <ArrowRight size={16} />}
-          </button>
-          <small>
-            无需选主题 · 结果以真实采集证据为准 · 可随时离开，稍后回来查看
-          </small>
+          <h1>自动发现</h1>
+          <p>汇总多渠道需求，分析并比较适合独立开发者的产品机会。</p>
         </div>
-        <div className="ws-radar-principles">
-          <span>从「不知道做什么」到</span>
-          <strong>有依据的下一步</strong>
-          <p>
-            <CheckCircle2 size={15} />
-            明确的付费人群与痛点
-          </p>
-          <p>
-            <CheckCircle2 size={15} />
-            适合独立开发者的最小方案
-          </p>
-          <p>
-            <CheckCircle2 size={15} />
-            可回看原文的证据与风险
-          </p>
-        </div>
+        <Button
+          variant="outline"
+          className="button primary"
+          disabled={!data?.configured || starting || latestRunning}
+          onClick={start}
+        >
+          {starting || latestRunning ? (
+            <Loader2 size={16} className="ws-radar-spin" />
+          ) : (
+            <Plus size={16} />
+          )}
+          {starting
+            ? "正在启动…"
+            : latestRunning
+              ? "正在自动发现…"
+              : "自动发现机会"}
+        </Button>
       </section>
       <RadarHistory
         revision={revision + refresh}
@@ -321,13 +307,17 @@ export function WorkspaceRadar({
       {historyError && (
         <p role="alert">
           {historyError}
-          <button onClick={() => setRefresh((n) => n + 1)}>重试</button>
+          <Button variant="outline" onClick={() => setRefresh((n) => n + 1)}>
+            重试
+          </Button>
         </p>
       )}
       {error && (
         <div className="alert" role="alert">
           {error}
-          <button onClick={() => setRefresh((n) => n + 1)}>重试读取</button>
+          <Button variant="outline" onClick={() => setRefresh((n) => n + 1)}>
+            重试读取
+          </Button>
         </div>
       )}
       {!data && !error && <p role="status">正在读取发现记录…</p>}
@@ -338,9 +328,13 @@ export function WorkspaceRadar({
             <p>
               请在设置中完成模型连接，雷达才能规划搜索、分析证据和生成建议。
             </p>
-            <button className="ws-text" onClick={openSettings}>
+            <Button
+              variant="outline"
+              className="ws-text"
+              onClick={openSettings}
+            >
               前往设置 <ArrowRight size={14} />
-            </button>
+            </Button>
           </div>
         </section>
       )}
@@ -354,73 +348,99 @@ export function WorkspaceRadar({
             自动发现站内详情页，提取正文；必要时运行浏览器。每站每轮最多访问 12
             页，后续扫描继续未访问页面。产品介绍用于了解竞品，不直接作为用户痛点证据。
           </p>
-          {crawler.sites
-            .filter((s) => s.enabled)
-            .map((site) => {
-              const job = scan?.jobs.find(
-                (j) =>
-                  (j.payload as { siteId?: string } | null)?.siteId === site.id,
-              );
-              const payload = job?.payload as
-                | {
-                    savedCount?: number;
-                    crawlStats?: {
-                      visited: number;
-                      rendered: number;
-                      cached: number;
-                      blocked: number;
-                      remaining: number;
-                    };
-                  }
-                | undefined;
-              const stats = payload?.crawlStats;
-              const state = !job
-                ? "等待下一轮扫描"
-                : ({
-                    pending: "待采集",
-                    running: "采集中",
-                    completed: "完成",
-                    succeeded: "完成",
-                    failed: "失败",
-                    queued: "排队中",
-                  }[job.status] ?? job.status);
-              return (
-                <div className="ws-radar-source-row" key={site.id}>
-                  <strong>
-                    <a
-                      href={safeUrl(site.seed)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {site.name}
-                    </a>
-                  </strong>
-                  <span className="ws-muted">
-                    {site.kind === "community"
-                      ? "用户社区"
-                      : site.kind === "product_directory"
-                        ? "产品目录"
-                        : "产品官网"}{" "}
-                    · {state}
-                  </span>
-                  {stats && (
-                    <p className="ws-muted">
-                      访问 {stats.visited} 页 · 入库 {payload?.savedCount ?? 0}{" "}
-                      篇 · 浏览器渲染 {stats.rendered} 页 · 缓存 {stats.cached}{" "}
-                      篇 · 受限 {stats.blocked} 页 · 待访问 {stats.remaining} 页
-                    </p>
-                  )}
-                  {job?.last_error && (
-                    <p className="ws-warning">{job.last_error}</p>
-                  )}
-                  {jobWarnings(job?.payload).map((warning, index) => (
-                    <p className="ws-warning" key={index}>
-                      {warning}
-                    </p>
-                  ))}
-                </div>
-              );
-            })}
+          <div className="admin-table-panel">
+            <Table aria-label="网页采集站点">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>站点</TableHead>
+                  <TableHead>类型 / 状态</TableHead>
+                  <TableHead>实际采集量</TableHead>
+                  <TableHead>异常</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {crawler.sites
+                  .filter((s) => s.enabled)
+                  .map((site) => {
+                    const job = scan?.jobs.find(
+                      (j) =>
+                        (j.payload as { siteId?: string } | null)?.siteId ===
+                        site.id,
+                    );
+                    const payload = job?.payload as
+                      | {
+                          savedCount?: number;
+                          crawlStats?: {
+                            visited: number;
+                            rendered: number;
+                            cached: number;
+                            blocked: number;
+                            remaining: number;
+                          };
+                        }
+                      | undefined;
+                    const stats = payload?.crawlStats;
+                    const state = !job
+                      ? "等待下一轮扫描"
+                      : ({
+                          pending: "待采集",
+                          running: "采集中",
+                          completed: "完成",
+                          succeeded: "完成",
+                          failed: "失败",
+                          queued: "排队中",
+                        }[job.status] ?? job.status);
+                    return (
+                      <TableRow key={site.id}>
+                        <TableCell>
+                          <strong>
+                            <a
+                              href={safeUrl(site.seed)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {site.name}
+                            </a>
+                          </strong>
+                        </TableCell>
+                        <TableCell>
+                          <span className="ws-muted">
+                            {site.kind === "community"
+                              ? "用户社区"
+                              : site.kind === "product_directory"
+                                ? "产品目录"
+                                : "产品官网"}{" "}
+                            · {state}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {!stats && "—"}
+                          {stats && (
+                            <p className="ws-muted">
+                              访问 {stats.visited} 页 · 入库{" "}
+                              {payload?.savedCount ?? 0} 篇 · 浏览器渲染{" "}
+                              {stats.rendered} 页 · 缓存 {stats.cached} 篇 ·
+                              受限 {stats.blocked} 页 · 待访问 {stats.remaining}{" "}
+                              页
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {job?.last_error && (
+                            <p className="ws-warning">{job.last_error}</p>
+                          )}
+                          {jobWarnings(job?.payload).map((warning, index) => (
+                            <p className="ws-warning" key={index}>
+                              {warning}
+                            </p>
+                          ))}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+              </TableBody>
+            </Table>
+          </div>
         </details>
       )}
       {scan && (
@@ -592,14 +612,64 @@ export function WorkspaceRadar({
             </span>
           </div>
           <p className="ws-radar-summary">{report.summary}</p>
-          {report.recommendations.map((recommendation, index) => (
-            <RecommendationCard
-              key={recommendation.id || index}
-              item={recommendation}
-              rank={index + 1}
-              openDocument={openDocument}
-            />
-          ))}
+          <DataTable
+            key={reportScan?.id}
+            label="本轮机会结果"
+            data={report.recommendations.map((item, index) => ({
+              ...item,
+              rank: index + 1,
+            }))}
+            columns={[
+              { accessorKey: "rank", header: "优先级" },
+              {
+                accessorKey: "title",
+                header: "机会",
+                cell: ({ row }) => (
+                  <Button
+                    variant="outline"
+                    className="admin-record-link"
+                    onClick={() => setDetailId(row.original.id)}
+                  >
+                    {row.original.title}
+                  </Button>
+                ),
+              },
+              { accessorKey: "buyer", header: "付费人群" },
+              { accessorKey: "confidence", header: "证据置信度" },
+              { accessorKey: "independentVoices", header: "独立声音" },
+              {
+                id: "actions",
+                header: "操作",
+                cell: ({ row }) => (
+                  <Button
+                    variant="outline"
+                    className="button"
+                    onClick={() => setDetailId(row.original.id)}
+                  >
+                    查看分析
+                  </Button>
+                ),
+              },
+            ]}
+          />
+          {report.recommendations
+            .filter((item) => item.id === detailId)
+            .map((item) => (
+              <section key={item.id} className="admin-result-detail">
+                <Button
+                  variant="outline"
+                  className="button"
+                  onClick={() => setDetailId(null)}
+                >
+                  收起分析
+                </Button>
+                <RecommendationCard
+                  item={item}
+                  rank={report.recommendations.indexOf(item) + 1}
+                  openDocument={openDocument}
+                />
+              </section>
+            ))}
           {!report.recommendations.length && (
             <div className="ws-panel ws-empty">
               <Compass size={28} />
@@ -688,7 +758,8 @@ function EvidenceDashboard({
         ))}
       </div>
       {analytics.clusters.length > 8 && (
-        <button
+        <Button
+          variant="outline"
           className="ws-text ws-radar-cluster-toggle"
           onClick={() => setShowAll((value) => !value)}
           aria-expanded={showAll}
@@ -696,7 +767,7 @@ function EvidenceDashboard({
           {showAll
             ? "收起其余分组"
             : `展开其余 ${analytics.clusters.length - 8} 个分组`}
-        </button>
+        </Button>
       )}
       {!analytics.clusters.length && (
         <p className="ws-muted">本轮没有可展示的文本分组。</p>
@@ -787,14 +858,15 @@ function EvidenceClusterCard({
         <summary>查看分组原文（{cluster.documentIds.length}）</summary>
         <div className="ws-radar-document-buttons">
           {cluster.documentIds.map((id, index) => (
-            <button
+            <Button
+              variant="outline"
               className="ws-text"
               key={id}
               onClick={() => openDocument(id)}
               aria-label={`${cluster.label}：查看原文 ${index + 1}`}
             >
               原文 {index + 1} <ArrowRight size={13} />
-            </button>
+            </Button>
           ))}
         </div>
       </details>
@@ -876,12 +948,13 @@ function RecommendationCard({
             </div>
             <div className="ws-inline">
               {evidence.documentId && (
-                <button
+                <Button
+                  variant="outline"
                   className="ws-text"
                   onClick={() => openDocument(evidence.documentId)}
                 >
                   查看原文
-                </button>
+                </Button>
               )}
               {safeUrl(evidence.url) && (
                 <a

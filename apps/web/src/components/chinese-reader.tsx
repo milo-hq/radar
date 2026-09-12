@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import { Languages, RefreshCw, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, when } from "../api";
@@ -99,9 +100,9 @@ export function ChineseReader({
           )}
           <div className="translated-heading">
             <h3>全文中文译文</h3>
-            <button className="text-button" onClick={onOriginal}>
+            <Button variant="outline" className="text-button" onClick={onOriginal}>
               切换原文 <ArrowRight size={14} />
-            </button>
+            </Button>
           </div>
           <pre className="source-body translated-body">
             {translation.result.bodyZh}
@@ -129,7 +130,7 @@ export function ChineseReader({
             </div>
           ) : (
             <>
-              <button
+              <Button variant="outline"
                 className="button primary"
                 onClick={generate}
                 disabled={busy || !state.configured}
@@ -140,7 +141,7 @@ export function ChineseReader({
                   : state.job?.status === "failed"
                     ? "重试中文翻译"
                     : "生成中文译文与要点"}
-              </button>
+              </Button>
               {state.job?.last_error && (
                 <div className="alert" role="alert">
                   {state.job.last_error}
@@ -164,9 +165,9 @@ export function ChineseReader({
               </small>
             </div>
           )}
-          <button className="text-button" onClick={onOriginal}>
+          <Button variant="outline" className="text-button" onClick={onOriginal}>
             先查看原文 <ArrowRight size={14} />
-          </button>
+          </Button>
         </div>
       )}
     </section>

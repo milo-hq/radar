@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import { Clock3 } from "lucide-react";
 import { api, when } from "../api";
 import { Badge } from "./primitives";
@@ -47,7 +48,7 @@ export function Jobs({
               }
             </Badge>
             {j.status === "failed" && (
-              <button
+              <Button variant="outline"
                 className="text-button"
                 onClick={() =>
                   api(`/jobs/${j.id}/retry`, {})
@@ -56,7 +57,7 @@ export function Jobs({
                 }
               >
                 重试
-              </button>
+              </Button>
             )}
           </div>
         ))

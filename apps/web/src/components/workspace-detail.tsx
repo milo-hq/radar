@@ -1,3 +1,6 @@
+import { Textarea } from "./ui/textarea";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeft, Check, FileText, Plus, Save } from "lucide-react";
 import { api, when } from "../api";
@@ -71,9 +74,9 @@ export function WorkspaceDetail({
     return (
       <section className="ws-panel ws-empty">
         {error || "正在读取机会档案…"}
-        <button className="button" onClick={back}>
+        <Button variant="outline" className="button" onClick={back}>
           返回机会
-        </button>
+        </Button>
       </section>
     );
   const o = opportunity,
@@ -100,10 +103,10 @@ export function WorkspaceDetail({
   }
   return (
     <>
-      <button className="ws-back" onClick={back}>
+      <Button variant="outline" className="ws-back" onClick={back}>
         <ArrowLeft size={16} />
         全部机会
-      </button>
+      </Button>
       <div className="ws-detail-heading">
         <div>
           <div className="ws-inline">
@@ -115,10 +118,10 @@ export function WorkspaceDetail({
           <h1>{o.title}</h1>
           <p>机会方案是待验证的假设。只有经你核对的声明才计入证据门槛。</p>
         </div>
-        <button className="button" disabled={editing} onClick={startEdit}>
+        <Button variant="outline" className="button" disabled={editing} onClick={startEdit}>
           <Save size={16} />
           编辑档案
-        </button>
+        </Button>
       </div>
       {error && (
         <div className="alert" role="alert">
@@ -159,7 +162,7 @@ export function WorkspaceDetail({
               <form onSubmit={save} className="ws-form">
                 <label>
                   机会名称
-                  <input
+                  <Input
                     required
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -189,7 +192,7 @@ export function WorkspaceDetail({
                   ].map(([key, label, placeholder]) => (
                     <label key={key}>
                       {label}
-                      <textarea
+                      <Textarea
                         rows={3}
                         placeholder={placeholder}
                         value={dossier[key] || ""}
@@ -205,7 +208,7 @@ export function WorkspaceDetail({
                   {validationFields.map(([key, label]) => (
                     <label key={key}>
                       {label}
-                      <textarea
+                      <Textarea
                         rows={2}
                         value={dossier.validation[key] || ""}
                         onChange={(e) =>
@@ -222,16 +225,16 @@ export function WorkspaceDetail({
                   ))}
                 </div>
                 <div className="ws-inline">
-                  <button disabled={busy} className="button primary">
+                  <Button variant="outline" disabled={busy} className="button primary">
                     {busy ? "保存中…" : "保存档案"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="outline"
                     type="button"
                     className="button"
                     onClick={() => setEditing(false)}
                   >
                     取消编辑
-                  </button>
+                  </Button>
                 </div>
               </form>
             ) : (
@@ -267,10 +270,10 @@ export function WorkspaceDetail({
                 <h2>逐条核对证据</h2>
                 <p>检查原文是否支持声明；接受声明与接受原文是两项独立判断。</p>
               </div>
-              <button className="button" onClick={() => setAdding(!adding)}>
+              <Button variant="outline" className="button" onClick={() => setAdding(!adding)}>
                 <Plus size={15} />
                 补充证据
-              </button>
+              </Button>
             </div>
             {adding && (
               <AddClaim
@@ -308,9 +311,9 @@ export function WorkspaceDetail({
                     ))}
                   </select>
                 </label>
-                <button className="button" disabled={!claimId || busy}>
+                <Button variant="outline" className="button" disabled={!claimId || busy}>
                   关联
-                </button>
+                </Button>
               </form>
             )}
             {!o.claims.length && (
@@ -373,17 +376,17 @@ export function WorkspaceDetail({
                   </label>
                 )}
                 <div className="ws-claim-actions">
-                  <button
+                  <Button variant="outline"
                     className="ws-text"
                     onClick={() => openDocument(c.raw_document_id)}
                   >
                     <FileText size={14} />
                     查看原文与译文
-                  </button>
+                  </Button>
                   <div className="ws-inline">
                     {(["accepted", "rejected", "pending"] as const).map(
                       (status) => (
-                        <button
+                        <Button variant="outline"
                           key={status}
                           className={
                             "button " + (status === "accepted" ? "primary" : "")
@@ -406,7 +409,7 @@ export function WorkspaceDetail({
                             : status === "rejected"
                               ? "排除"
                               : "待核对"}
-                        </button>
+                        </Button>
                       ),
                     )}
                   </div>
@@ -434,9 +437,9 @@ export function WorkspaceDetail({
                 </div>
               ))}
             </dl>
-            <button className="ws-text" onClick={startEdit}>
+            <Button variant="outline" className="ws-text" onClick={startEdit}>
               编辑验证计划
-            </button>
+            </Button>
             <form
               className="ws-form ws-decision"
               onSubmit={(e) => {
@@ -465,7 +468,7 @@ export function WorkspaceDetail({
               </label>
               <label>
                 决策理由
-                <textarea
+                <Textarea
                   required
                   rows={3}
                   placeholder="依据是什么？接下来要解决哪个未知？"
@@ -482,7 +485,7 @@ export function WorkspaceDetail({
                     请先达到候选证据门槛，并填写全部五项验证条件。
                   </p>
                 )}
-              <button
+              <Button variant="outline"
                 className="button primary"
                 disabled={
                   busy ||
@@ -495,7 +498,7 @@ export function WorkspaceDetail({
                 }
               >
                 记录决策
-              </button>
+              </Button>
             </form>
           </section>
           <section className="ws-panel">
@@ -645,13 +648,13 @@ function AddClaim({
       )}
       {document && (
         <>
-          <button
+          <Button variant="outline"
             type="button"
             className="ws-text"
             onClick={() => openDocument(documentId)}
           >
             打开原文与中文阅读
-          </button>
+          </Button>
           <details open>
             <summary>原始正文 · 选择并复制精确摘录</summary>
             <pre className="ws-source">{document.body}</pre>
@@ -670,7 +673,7 @@ function AddClaim({
       </label>
       <label>
         声明
-        <textarea
+        <Textarea
           required
           rows={2}
           value={statement}
@@ -680,7 +683,7 @@ function AddClaim({
       </label>
       <label>
         精确原文摘录
-        <textarea
+        <Textarea
           required
           rows={3}
           value={quote}
@@ -699,17 +702,17 @@ function AddClaim({
         </div>
       )}
       <div className="ws-inline">
-        <button
+        <Button variant="outline"
           className="button primary"
           disabled={
             busy || !document || !quote || !document.body.includes(quote)
           }
         >
           添加待核对声明
-        </button>
-        <button className="button" type="button" onClick={done}>
+        </Button>
+        <Button variant="outline" className="button" type="button" onClick={done}>
           取消
-        </button>
+        </Button>
       </div>
     </form>
   );

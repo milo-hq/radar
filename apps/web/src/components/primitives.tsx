@@ -1,3 +1,4 @@
+import { Badge as ShadcnBadge } from "./ui/badge";
 import { Telescope } from "lucide-react";
 export function Badge({
   children,
@@ -6,7 +7,20 @@ export function Badge({
   children: React.ReactNode;
   tone?: string;
 }) {
-  return <span className={"badge " + tone}>{children}</span>;
+  return (
+    <ShadcnBadge
+      variant="outline"
+      className={
+        tone === "green"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : tone === "amber" || tone === "orange"
+            ? "border-amber-200 bg-amber-50 text-amber-800"
+            : "text-muted-foreground"
+      }
+    >
+      {children}
+    </ShadcnBadge>
+  );
 }
 export function Empty({
   title,
