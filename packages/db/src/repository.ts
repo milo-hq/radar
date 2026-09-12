@@ -67,12 +67,36 @@ export async function linkProduct(
     /^www\./,
     "",
   );
-  const product = (
+  const canonical = docs[0]?.canonical_url ?? url;
+  await c.query("SELECT pg_advisory_xact_lock(hashtext($1))", [domain]);
+  let product = (
     await c.query(
-      "INSERT INTO winning_products(domain,name) VALUES($1,$2) ON CONFLICT(domain) DO UPDATE SET domain=EXCLUDED.domain RETURNING *",
-      [domain, name || domain],
+      "SELECT p.* FROM product_identifiers i JOIN winning_products p ON p.id=i.product_id WHERE i.url=$1",
+      [canonical],
     )
   ).rows[0];
+  if (
+    !product &&
+    ["/", "/pricing", "/open"].includes(
+      new URL(canonical).pathname.replace(/\/$/, "") || "/",
+    )
+  ) {
+    const matches = (
+      await c.query("SELECT * FROM winning_products WHERE domain=$1", [domain])
+    ).rows;
+    if (matches.length === 1) product = matches[0];
+  }
+  if (!product)
+    product = (
+      await c.query(
+        "INSERT INTO winning_products(domain,name) VALUES($1,$2) RETURNING *",
+        [domain, name || domain],
+      )
+    ).rows[0];
+  await c.query(
+    "INSERT INTO product_identifiers VALUES($1,$2) ON CONFLICT DO NOTHING",
+    [product.id, canonical],
+  );
   for (const doc of docs)
     await c.query(
       "INSERT INTO product_documents VALUES($1,$2) ON CONFLICT DO NOTHING",

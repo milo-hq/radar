@@ -31,10 +31,8 @@ test("source inspection, search, review persistence and mobile navigation", asyn
   });
   expect(seeded.ok()).toBe(true);
   await page.goto("/");
-  await expect(page.getByText("数据库已连接")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Signals 原始信号", exact: true })
-    .click();
+  await expect(page.getByRole("navigation", { name: "主导航" })).toBeVisible();
+  await page.getByRole("button", { name: "原文库", exact: true }).click();
   await page.getByRole("textbox", { name: "搜索原始文档" }).fill(title);
   const row = page.locator(".document-row").first();
   await expect(row).toContainText("Review test source");
@@ -64,25 +62,23 @@ test("source inspection, search, review persistence and mobile navigation", asyn
     .click();
   await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page
-    .getByRole("button", { name: "Settings 设置", exact: true })
-    .click();
+  await page.getByRole("button", { name: "创始人设置", exact: true }).click();
   await expect(page.getByLabel("技术优势")).toBeVisible();
   await page.getByLabel("技术优势").fill("Browser QA TypeScript");
   await page.getByRole("button", { name: "保存配置" }).click();
   await expect(page.getByRole("status")).toContainText("已保存");
   await page.reload();
-  await page
-    .getByRole("button", { name: "Settings 设置", exact: true })
-    .click();
+  await page.getByRole("button", { name: "创始人设置", exact: true }).click();
   await expect(page.getByLabel("技术优势")).toHaveValue(
     "Browser QA TypeScript",
   );
   await page.setViewportSize({ width: 390, height: 844 });
-  await page
-    .getByRole("button", { name: "Opportunities 商业机会", exact: true })
-    .click();
-  await expect(page.getByText("好的机会，需要先有证据")).toBeVisible();
+  await page.getByRole("button", { name: "机会工作台", exact: true }).click();
+  await expect(page.getByRole("button", { name: "查看参考产品", exact: true }))
+    .toBeVisible()
+    .catch(async () => {
+      await expect(page.locator(".ws-opportunity-card").first()).toBeVisible();
+    });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -149,9 +145,7 @@ test("cached Chinese reading shows traceable points and original text remains ac
     await db.end();
   }
   await page.goto("/");
-  await page
-    .getByRole("button", { name: "Signals 原始信号", exact: true })
-    .click();
+  await page.getByRole("button", { name: "原文库", exact: true }).click();
   await page
     .getByRole("textbox", { name: "搜索原始文档" })
     .fill("中文翻译浏览器测试");
@@ -169,4 +163,104 @@ test("cached Chinese reading shows traceable points and original text remains ac
   await expect(page.locator(".source-body")).toHaveText(
     "The plan costs $9 per month.",
   );
+});
+test("opportunity evidence review unlocks validation and preserves the decision", async ({
+  page,
+  request,
+}) => {
+  const title = "UI验证机会 " + Date.now();
+  const product = await (
+    await request.post("/api/products", {
+      data: { name: title, url: "https://example.com/ui/" + Date.now() },
+    })
+  ).json();
+  const r = await request.post("/api/reddit/import", {
+    data: {
+      thread: [
+        {
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "opp" + Date.now(),
+                  subreddit: "testing",
+                  title,
+                  selftext: "A paid plan exists. I need invoice export.",
+                  author: "qa",
+                },
+              },
+            ],
+          },
+        },
+        { data: { children: [] } },
+      ],
+    },
+  });
+  const documentId = (await r.json()).documents[0];
+  const opp = await (
+    await request.post("/api/opportunities", {
+      data: {
+        productId: product.id,
+        title,
+        dossier: {
+          customer: "Solo sellers",
+          validation: {
+            test: "Interview 3 sellers",
+            budget: "$10",
+            duration: "7 days",
+            success: "2 paid trials",
+            kill: "No buyer",
+          },
+        },
+      },
+    })
+  ).json();
+  for (const [kind, quote] of [
+    ["market", "A paid plan exists."],
+    ["pain", "I need invoice export."],
+  ]) {
+    const c = await (
+      await request.post("/api/claims", {
+        data: {
+          productId: product.id,
+          documentId,
+          kind,
+          statement: quote,
+          quote,
+        },
+      })
+    ).json();
+    await request.post(`/api/opportunities/${opp.id}/claims`, {
+      data: { claimId: c.id },
+    });
+  }
+  await page.goto("/");
+  await page.getByRole("heading", { name: title, exact: true }).click();
+  await expect(page.getByText("继续补证，暂存为草稿")).toBeVisible();
+  await page
+    .locator(".ws-claim")
+    .nth(0)
+    .getByRole("button", { name: "接受声明" })
+    .click();
+  await expect(
+    page.locator(".ws-claim").nth(0).getByRole("button", { name: "接受声明" }),
+  ).toBeDisabled();
+  await page
+    .locator(".ws-claim")
+    .nth(1)
+    .getByRole("button", { name: "接受声明" })
+    .click();
+  await expect(page.getByText("已具备进入候选的最低证据")).toBeVisible();
+  await page.locator(".ws-decision select").selectOption("VALIDATE");
+  await page.getByLabel("决策理由").fill("先验证实际付款");
+  await page.getByRole("button", { name: "记录决策" }).click();
+  await expect(page.locator(".ws-timeline")).toContainText("先验证实际付款");
+  await page
+    .locator(".ws-claim")
+    .nth(1)
+    .getByRole("button", { name: "排除", exact: true })
+    .click();
+  await expect(page.getByText("继续补证，暂存为草稿")).toBeVisible();
+  await expect(page.locator(".ws-timeline")).toContainText("先验证实际付款");
 });

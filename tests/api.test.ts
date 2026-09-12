@@ -12,14 +12,15 @@ after(async () => {
   await app.close();
   await db.end();
 });
-test("summary reports actual database counts and unavailable intelligence honestly", async () => {
+test("summary reports actual opportunity counts without a global activation gate", async () => {
   const result = await app.inject("/api/summary");
   assert.equal(result.statusCode, 200);
   const body = result.json();
-  assert.equal(body.stage, "FOUNDATION");
-  assert.equal(body.opportunities, 0);
+  assert.equal(body.stage, "OPPORTUNITY_RESEARCH");
+  assert.equal(body.opportunities, (await db.query("SELECT count(*)::int n FROM opportunities")).rows[0].n);
   assert.equal(typeof body.documents, "number");
-  assert.equal(body.qualityGate.passed, false);
+  assert.equal(body.qualityGate.scope, "opportunity");
+  assert.equal(body.qualityGate.passed, undefined);
 });
 test("invalid URLs and cross-origin writes cannot queue fetches", async () => {
   const bad = await app.inject({

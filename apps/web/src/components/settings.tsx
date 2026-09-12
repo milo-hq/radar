@@ -49,11 +49,15 @@ export function Settings({
     salesPreference: "销售偏好",
     avoidedMarkets: "避开的市场",
     riskPreference: "风险偏好",
+    hoursPerWeek: "每周可投入时间（小时）",
+    maxBuildWeeks: "最长开发周期（周）",
+    budget: "可投入预算",
+    maintenanceTolerance: "可承受的维护负担",
   };
   return (
     <div className="settings-grid">
       <form className="panel settings-form" onSubmit={save}>
-        <h2>Founder fit</h2>
+        <h2>创始人约束</h2>
         <p className="muted">
           由你定义适合自己的机会。空字段保持未知，不自动推断。
         </p>
@@ -115,10 +119,10 @@ export function Settings({
               detail: "原始采集阶段不依赖向量",
             },
             {
-              name: "LLM Provider",
+              name: "机会研究模型",
               icon: Telescope,
-              ok: false,
-              detail: "质量门禁前不启用模型分析",
+              ok: summary?.researchConfigured,
+              detail: "生成可核对的声明与机会草稿，由你审核证据",
             },
           ].map(({ name, icon: Icon, ok, detail }) => (
             <div className="connection-row" key={name}>

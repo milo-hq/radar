@@ -1,3 +1,5 @@
+import { registerOpportunities } from "./opportunities.js";
+import { translationConfig } from "../../../packages/llm/src/compatible.js";
 import { registerTranslations } from "./translations.js";
 import Fastify from "fastify";
 import type { Pool } from "pg";
@@ -21,6 +23,10 @@ const founderSchema = z.object({
   salesPreference: z.string().max(2000),
   avoidedMarkets: z.string().max(2000),
   riskPreference: z.string().max(2000),
+  hoursPerWeek: z.string().max(100).optional(),
+  maxBuildWeeks: z.string().max(100).optional(),
+  budget: z.string().max(200).optional(),
+  maintenanceTolerance: z.string().max(2000).optional(),
 });
 export async function buildApp(db: Pool) {
   const app = Fastify({ bodyLimit: 3_000_000, logger: false });
@@ -74,16 +80,22 @@ export async function buildApp(db: Pool) {
     ).rows[0];
     return {
       ...counts,
-      stage: "FOUNDATION",
-      opportunities: 0,
+      stage: "OPPORTUNITY_RESEARCH",
+      opportunities: (
+        await db.query("SELECT count(*)::int n FROM opportunities")
+      ).rows[0].n,
       qualityGate: {
-        passed: false,
-        targets: { products: 200, documents: 500 },
-        reason:
-          "Input quality requires human review before intelligence activation",
+        scope: "opportunity",
+        reason: "每个机会按市场与需求证据独立审核；不受全局采集数量限制",
       },
       redditConfigured: !!process.env.REDDIT_ACCESS_TOKEN,
-      llmConfigured: false,
+      llmConfigured: (() => {
+        try {
+          return !!translationConfig();
+        } catch {
+          return false;
+        }
+      })(),
       vectorAvailable: !!(
         await db.query("SELECT 1 FROM pg_extension WHERE extname='vector'")
       ).rowCount,
@@ -252,5 +264,6 @@ export async function buildApp(db: Pool) {
     ).rows,
   }));
   registerTranslations(app, db);
+  registerOpportunities(app, db);
   return app;
 }

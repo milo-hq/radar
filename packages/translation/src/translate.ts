@@ -77,13 +77,12 @@ export async function translateDocument(
       parts.push(validatePart(existing.result, chunks[i]));
       continue;
     }
-    const schema = partSchema.superRefine((part, ctx) => {
-      if (
-        part.keyPoints.some(
-          (p) => !p.sourceQuote.trim() || !chunks[i].includes(p.sourceQuote),
-        )
-      )
-        ctx.addIssue({ code: "custom", message: "中文要点引用不在原文中" });
+    const sourceQuoteCandidates = chunks[i].split("\n").filter((line) => line.trim());
+    const schema = partSchema.extend({
+      keyPoints: z.array(z.object({
+        textZh: z.string().min(1),
+        sourceLine: z.number().int().min(0).max(sourceQuoteCandidates.length - 1),
+      })).max(3),
     });
     const { value } = await runStructured(
       db,
@@ -95,13 +94,20 @@ export async function translateDocument(
         input: {
           title: doc.title || "Untitled source",
           body: chunks[i],
+          sourceQuoteCandidates,
           partIndex: i + 1,
           partCount: chunks.length,
         },
       },
       schema,
     );
-    const part = validatePart(value, chunks[i]);
+    const part = validatePart({
+      ...value,
+      keyPoints: value.keyPoints.map((point) => ({
+        textZh: point.textZh,
+        sourceQuote: sourceQuoteCandidates[point.sourceLine],
+      })),
+    }, chunks[i]);
     if (config.checkLease && !(await config.checkLease()))
       throw new Error("翻译任务租约失效");
     await db.query(

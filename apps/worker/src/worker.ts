@@ -1,3 +1,4 @@
+import { researchProduct } from "../../../packages/opportunities/src/research.js";
 import {
   translationConfig,
   CompatibleProvider,
@@ -34,6 +35,24 @@ while (!stop) {
       continue;
     }
     try {
+      if (job.type === "ANALYZE_PRODUCT") {
+        const config = translationConfig();
+        if (!config) throw new Error("尚未配置研究模型");
+        await researchProduct(pool, job.payload.productId, job.id, {
+          provider: new CompatibleProvider(config),
+          model: config.model,
+          lockToken: job.lock_token,
+          checkLease: async () =>
+            !!(
+              await pool.query(
+                "UPDATE jobs SET locked_until=now()+interval '120 seconds' WHERE id=$1 AND lock_token=$2 AND status='running' AND locked_until>now()",
+                [job.id, job.lock_token],
+              )
+            ).rowCount,
+        });
+        console.log(`Completed opportunity research ${job.id}`);
+        continue;
+      }
       if (job.type === "TRANSLATE_DOCUMENT") {
         const config = translationConfig();
         if (!config) throw new Error("尚未配置中文翻译模型");

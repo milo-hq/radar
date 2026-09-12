@@ -7,7 +7,7 @@ import {
   translateDocument,
 } from "../packages/translation/src/translate.js";
 import { saveDocuments } from "../packages/db/src/repository.js";
-import type { LLMProvider } from "../packages/llm/src/provider.js";
+import type { LLMProvider, ModelRequest } from "../packages/llm/src/provider.js";
 const db = new Pool({
   connectionString:
     process.env.TEST_DATABASE_URL ??
@@ -51,8 +51,9 @@ test("translation is cached, traceable and separate from immutable raw text", as
   ]);
   let calls = 0;
   const provider: LLMProvider = {
-    async generateStructured<T>() {
+    async generateStructured<T>(request: ModelRequest) {
       calls++;
+      assert.deepEqual((request.input as any).sourceQuoteCandidates, ["Price: $9/month"]);
       return {
         value: {
           titleZh: "定价",
@@ -60,7 +61,7 @@ test("translation is cached, traceable and separate from immutable raw text", as
           keyPoints: [
             {
               textZh: "方案价格为每月9美元，未证明实际收入。",
-              sourceQuote: "Price: $9/month",
+              sourceLine: 0,
             },
           ],
         } as T,
@@ -355,7 +356,7 @@ test("compatible adapter and refined translation schema work through the complet
                 keyPoints: [
                   {
                     textZh: "原文提到一个付费方案。",
-                    sourceQuote: "One paid plan.",
+                    sourceLine: 0,
                   },
                 ],
               }),
