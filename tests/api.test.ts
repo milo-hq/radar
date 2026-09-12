@@ -279,3 +279,35 @@ test("topic provider reservation permits only one concurrent request slot", asyn
     );
   }
 });
+
+test("radar history is paginated and old scans remain addressable", async () => {
+  const list = await app.inject("/api/radar/history?offset=0");
+  assert.equal(list.statusCode, 200);
+  assert.ok(Array.isArray(list.json().items));
+  assert.equal(typeof list.json().hasMore, "boolean");
+  const row = (
+    await db.query("SELECT id FROM radar_scans ORDER BY created_at,id LIMIT 1")
+  ).rows[0];
+  if (row) {
+    const detail = await app.inject(`/api/radar/history/${row.id}`);
+    assert.equal(detail.statusCode, 200);
+    assert.equal(detail.json().scan.id, row.id);
+    assert.ok(Array.isArray(detail.json().scan.jobs));
+  }
+  assert.equal(
+    (await app.inject("/api/radar/history/not-an-id")).statusCode,
+    400,
+  );
+  assert.equal(
+    (
+      await app.inject(
+        "/api/radar/history/00000000-0000-4000-8000-000000000000",
+      )
+    ).statusCode,
+    404,
+  );
+  assert.equal(
+    (await app.inject("/api/radar/history?offset=-1")).statusCode,
+    400,
+  );
+});

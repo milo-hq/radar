@@ -1796,3 +1796,38 @@
 .ws-radar-source-row p {
   margin: 6px 0;
 }
+.ws-radar-history-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.ws-radar-history-item {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: white;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ws-radar-history-item[aria-pressed="true"] {
+  border-color: #3f6d54;
+  background: #eff5f0;
+}
+.ws-radar-history-item span {
+  font-size: 12px;
+  color: #617068;
+}
+.ws-radar-history-pages {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}

@@ -1,3 +1,4 @@
+import { RadarHistory } from "./RadarHistory";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -184,6 +185,9 @@ export function WorkspaceRadar({
     };
   }, []);
   const [data, setData] = useState<RadarState | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedScan, setSelectedScan] = useState<Scan | null>(null);
+  const [historyError, setHistoryError] = useState("");
   const [previousReport, setPreviousReport] = useState<Scan | null>(null);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
@@ -205,16 +209,40 @@ export function WorkspaceRadar({
       alive = false;
     };
   }, [revision, refresh]);
-  const scan = data?.latest;
+  useEffect(() => {
+    if (!selectedId) return;
+    let alive = true;
+    api<{ scan: Scan }>(`/radar/history/${selectedId}`)
+      .then((value) => {
+        if (alive) {
+          setSelectedScan(value.scan);
+          setHistoryError("");
+        }
+      })
+      .catch(() => {
+        if (alive) setHistoryError("这一轮记录读取失败，请重新选择或重试。");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [selectedId, revision, refresh]);
+  const selectScan = (id: string | null) => {
+    setSelectedId(id);
+    setSelectedScan(null);
+    setHistoryError("");
+    setRefresh((n) => n + 1);
+  };
+  const scan = selectedId ? selectedScan : data?.latest;
+  const latestRunning = isActive(data?.latest);
   const running = isActive(scan);
-  const reportScan = scan?.report ? scan : previousReport;
+  const reportScan = selectedId ? scan : scan?.report ? scan : previousReport;
   const report = reportScan?.report;
   async function start() {
     setStarting(true);
     setError("");
     try {
       await api("/radar", undefined, "POST");
-      setRefresh((n) => n + 1);
+      selectScan(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "启动失败，请重试");
     } finally {
@@ -240,20 +268,20 @@ export function WorkspaceRadar({
           </p>
           <button
             className="button primary"
-            disabled={!data?.configured || starting || running}
+            disabled={!data?.configured || starting || latestRunning}
             onClick={start}
           >
-            {starting || running ? (
+            {starting || latestRunning ? (
               <Loader2 size={17} className="ws-radar-spin" />
             ) : (
               <Compass size={17} />
             )}
             {starting
               ? "正在启动…"
-              : running
+              : latestRunning
                 ? "正在自动发现…"
                 : "自动发现机会"}
-            {!running && !starting && <ArrowRight size={16} />}
+            {!latestRunning && !starting && <ArrowRight size={16} />}
           </button>
           <small>
             无需选主题 · 结果以真实采集证据为准 · 可随时离开，稍后回来查看
@@ -276,6 +304,26 @@ export function WorkspaceRadar({
           </p>
         </div>
       </section>
+      <RadarHistory
+        revision={revision + refresh}
+        selectedId={selectedId}
+        latestId={data?.latest?.id}
+        onSelect={selectScan}
+      />
+      {selectedId && (
+        <p role="status">
+          正在查看历史轮次 ·{" "}
+          {selectedScan
+            ? new Date(selectedScan.created_at).toLocaleString("zh-CN")
+            : "读取中…"}
+        </p>
+      )}
+      {historyError && (
+        <p role="alert">
+          {historyError}
+          <button onClick={() => setRefresh((n) => n + 1)}>重试</button>
+        </p>
+      )}
       {error && (
         <div className="alert" role="alert">
           {error}
@@ -379,7 +427,9 @@ export function WorkspaceRadar({
         <section className="ws-panel">
           <div className="ws-section-title">
             <div>
-              <span className="ws-kicker">本轮发现</span>
+              <span className="ws-kicker">
+                {selectedId ? "历史发现" : "本轮发现"}
+              </span>
               <h2>
                 {scan.status === "complete"
                   ? "发现完成"

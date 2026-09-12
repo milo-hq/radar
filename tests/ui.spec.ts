@@ -506,3 +506,82 @@ test("crawler coverage shows actual site outcomes on mobile", async ({
     ),
   ).toBe(true);
 });
+
+test("historical radar selection survives polling and empty rounds never borrow another report", async ({
+  page,
+}) => {
+  const old = {
+    id: "old",
+    status: "complete",
+    created_at: "2026-08-01T10:00:00Z",
+    updated_at: "2026-08-01T10:00:00Z",
+    plan: null,
+    coverage: null,
+    analytics: null,
+    jobs: [],
+    error: null,
+    report: {
+      summary: "这是八月保存的机会报告",
+      recommendations: [],
+      rejectedSummary: "",
+    },
+  };
+  const latest = {
+    ...old,
+    id: "new",
+    created_at: "2026-09-01T10:00:00Z",
+    report: { ...old.report, summary: "这是最新报告" },
+  };
+  const failed = {
+    ...old,
+    id: "failed",
+    status: "failed",
+    created_at: "2026-08-02T10:00:00Z",
+    report: null,
+    error: "测试失败轮次",
+  };
+  await page.route("**/api/radar", (route) =>
+    route.fulfill({ json: { configured: true, latest, previous: latest } }),
+  );
+  await page.route("**/api/radar/history?*", (route) =>
+    route.fulfill({
+      json: {
+        items: [latest, failed, old].map((s) => ({
+          ...s,
+          opportunity_count: s.report ? 0 : null,
+        })),
+        hasMore: false,
+      },
+    }),
+  );
+  await page.route("**/api/radar/history/old", (route) =>
+    route.fulfill({ json: { scan: old } }),
+  );
+  await page.route("**/api/radar/history/failed", (route) =>
+    route.fulfill({ json: { scan: failed } }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page
+    .locator(".ws-radar-history-item")
+    .filter({ hasText: "2026/08/01" })
+    .click();
+  await expect(page.getByText(old.report.summary)).toBeVisible();
+  await page.waitForTimeout(5500);
+  await expect(page.getByText(old.report.summary)).toBeVisible();
+  await expect(page.getByText(latest.report.summary)).toHaveCount(0);
+  await page
+    .locator(".ws-radar-history-item")
+    .filter({ hasText: "2026/08/02" })
+    .click();
+  await expect(page.getByText("测试失败轮次")).toBeVisible();
+  await expect(page.getByText(old.report.summary)).toHaveCount(0);
+  await expect(page.getByText(latest.report.summary)).toHaveCount(0);
+  await page.getByRole("button", { name: "查看最新一轮" }).click();
+  await expect(page.getByText(latest.report.summary)).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
