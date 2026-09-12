@@ -350,3 +350,93 @@ test("radar starts without a topic and renders ranked evidence on mobile", async
   ).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test("Python evidence dashboard works before model report and remains usable on mobile", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const clusters = Array.from({ length: 10 }, (_, i) => ({
+    id: `c${i}`,
+    label: `发票处理反馈组 ${i + 1}`,
+    documentIds: [`d${i}`],
+    independentAccounts: 1,
+    sourceCount: 1,
+    sourceNames: ["wordpress"],
+    recentCount: 1,
+    painMentions: 1,
+    commercialMentions: 1,
+    frictionMentions: 0,
+    evidenceScore: 40,
+    dimensions: {
+      recurrence: 0,
+      crossSource: 0,
+      recency: i === 0 ? null : 100,
+      pain: 100,
+      commercial: 100,
+      friction: 0,
+    },
+    unknowns: ["verified_willingness_to_pay"],
+  }));
+  await page.route("**/api/radar", (r) =>
+    r.fulfill({
+      json: {
+        configured: true,
+        latest: {
+          id: "python-scan",
+          status: "analyzing",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          plan: { queries: [] },
+          coverage: {
+            collected: 10,
+            eligible: 10,
+            analyzed: 0,
+            excluded: 0,
+            duplicates: 0,
+            failedJobs: 0,
+            sourceCounts: { wordpress: 10 },
+          },
+          analytics: {
+            version: "1",
+            documentCount: 10,
+            uniqueContentCount: 10,
+            clusterCount: 10,
+            sourceCounts: { wordpress: 10 },
+            clusters,
+            limitations: ["Keyword heuristics are not verified intent."],
+          },
+          report: null,
+          jobs: [
+            {
+              type: "DISCOVER_TOPIC",
+              status: "succeeded",
+              last_error: null,
+              payload: { warnings: ["另一应用评论为空"] },
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await page.goto("/");
+  const dashboard = page.getByRole("region", { name: "多维证据看板" });
+  await expect(dashboard).toBeVisible();
+  await expect(
+    page.getByText("发票处理反馈组 8", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("发票处理反馈组 9", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "展开其余 2 个分组" }).click();
+  await expect(
+    page.getByText("发票处理反馈组 10", { exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(errors).toEqual([]);
+});

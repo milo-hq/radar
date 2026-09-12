@@ -5,3 +5,8 @@ dist/
 playwright-report/
 test-results/
 .playwright-cli/
+
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

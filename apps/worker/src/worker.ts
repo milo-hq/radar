@@ -1,3 +1,4 @@
+import { collectReviews } from "../../../packages/radar/src/data-engine.js";
 import {
   advanceScans,
   runRadarJob,
@@ -66,7 +67,9 @@ while (!stop) {
           continue;
         }
         try {
-          const result = await discoverTopic(source, query);
+          const result = ["appstore", "wordpress"].includes(source)
+            ? await collectReviews(source, query)
+            : await discoverTopic(source, query);
           await transaction(pool, async (c) => {
             if (!(await finishJob(c, job))) throw Error("主题采集租约失效");
             const before = (
@@ -95,6 +98,7 @@ while (!stop) {
                   savedCount: after - before,
                   matchedCount: rows.length,
                   quotaRemaining: result.quotaRemaining,
+                  warnings: "errors" in result ? result.errors : [],
                 }),
               ],
             );

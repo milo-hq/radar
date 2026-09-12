@@ -31,6 +31,37 @@ type Recommendation = {
     author: string;
   }[];
 };
+type EvidenceCluster = {
+  id: string;
+  label: string;
+  documentIds: string[];
+  independentAccounts: number;
+  sourceCount: number;
+  sourceNames: string[];
+  recentCount: number;
+  painMentions: number;
+  commercialMentions: number;
+  frictionMentions: number;
+  evidenceScore: number;
+  dimensions: {
+    recurrence: number;
+    crossSource: number;
+    recency: number | null;
+    pain: number;
+    commercial: number;
+    friction: number;
+  };
+  unknowns: string[];
+};
+type RadarAnalytics = {
+  version: "1";
+  documentCount: number;
+  uniqueContentCount: number;
+  clusterCount: number;
+  sourceCounts: Record<string, number>;
+  clusters: EvidenceCluster[];
+  limitations: string[];
+};
 type Scan = {
   id: string;
   status:
@@ -42,6 +73,7 @@ type Scan = {
     | "failed";
   created_at: string;
   updated_at: string;
+  analytics?: RadarAnalytics | null;
   plan: { queries: { query: string; reason: string }[] } | null;
   coverage: {
     collected: number;
@@ -73,7 +105,11 @@ type RadarState = {
 const stages = [
   { id: "planning", title: "规划搜索", detail: "自动选择值得探索的需求方向" },
   { id: "collecting", title: "采集信号", detail: "跨来源查找真实讨论与产品" },
-  { id: "analyzing", title: "核验证据", detail: "去重、筛选并分析独立声音" },
+  {
+    id: "analyzing",
+    title: "分析证据",
+    detail: "文本分组、统计与模型证据提取",
+  },
   {
     id: "reporting",
     title: "给出建议",
@@ -83,6 +119,32 @@ const stages = [
 const isActive = (scan: Scan | null | undefined) =>
   !!scan && scan.status !== "complete" && scan.status !== "failed";
 const safeUrl = (url: string) => (/^https?:\/\//i.test(url) ? url : undefined);
+const evidenceUnknownLabels: Record<string, string> = {
+  sampling_representativeness: "样本能否代表更广泛的人群",
+  market_size: "市场规模",
+  verified_willingness_to_pay: "是否愿意实际付费",
+  cross_platform_identity: "不同平台账号是否为同一人",
+  publication_time: "部分材料的发布时间",
+  author_identity: "部分来源的作者身份",
+  original_source: "复制内容的原始来源",
+};
+const evidenceMethodNotes = [
+  "按文本用词相似程度分组，使用 TF-IDF 方法。相似不代表表达相同需求；同组材料也可能关联较弱。",
+  "统一大小写与空白后完全相同的内容只计一次。同内容多个账号的独立性未获证实，按保守方式合并计算。",
+  "平台总数统计原始材料；复制来源冲突时不增加平台票数；日期使用全部副本均有效时的最早日期。当前样本无法证明市场规模或需求普遍程度。",
+  "痛点、商业与使用阻力指标来自中英文关键词。命中词语不等于真实意图，未命中也不代表没有需求。",
+  "文本统计最多处理 1000 篇材料，每篇使用正文的前 6000 个规范化字符，正文为空时使用标题。全空内容会被拒绝，长文与后续讨论可能缺失。",
+  "近期指过去 30 天，占比以全部去重内容为分母。缺失、无效或未来日期标为未知；全部日期未知时不计算近期指标。",
+];
+const jobWarnings = (payload: unknown): string[] => {
+  if (!payload || typeof payload !== "object" || !("warnings" in payload))
+    return [];
+  return Array.isArray(payload.warnings)
+    ? payload.warnings.filter(
+        (warning): warning is string => typeof warning === "string",
+      )
+    : [];
+};
 
 export function WorkspaceRadar({
   revision,
@@ -278,9 +340,11 @@ export function WorkspaceRadar({
                 ))}
               </div>
               <p className="ws-muted">
-                本轮检索 HN、GitHub Issues、Stack
-                Overflow；这些渠道偏向技术社区。每篇分析前 4000
-                字符，缺少完整后续讨论，搜索命中不等于需求成立。
+                检索渠道包括 HN、GitHub Issues、Stack Overflow、App Store 与
+                WordPress
+                插件评论。各渠道可能没有返回材料，实际采集量以下方数字为准。
+                模型提取每篇前 4000
+                字符，可能缺少完整后续讨论；搜索命中不等于需求成立。
               </p>
               <div className="ws-radar-sources">
                 {Object.entries(scan.coverage.sourceCounts ?? {}).map(
@@ -308,20 +372,50 @@ export function WorkspaceRadar({
               </ul>
             </details>
           )}
-          {!!scan.jobs?.some((job) => job.last_error) && (
+          {!!scan.jobs?.some(
+            (job) => job.last_error || jobWarnings(job.payload).length,
+          ) && (
             <details className="ws-radar-plan">
-              <summary>查看任务异常</summary>
+              <summary>查看采集提醒与任务异常</summary>
               {scan.jobs
-                .filter((job) => job.last_error)
+                .filter(
+                  (job) => job.last_error || jobWarnings(job.payload).length,
+                )
                 .map((job, i) => (
-                  <p key={i} className="ws-warning">
-                    {job.type} · {job.status}：{job.last_error}
-                  </p>
+                  <div key={i}>
+                    {job.last_error && (
+                      <p className="ws-warning">
+                        {job.type} · {job.status}：{job.last_error}
+                      </p>
+                    )}
+                    {jobWarnings(job.payload).map((warning, index) => (
+                      <p key={index} className="ws-warning">
+                        采集提醒：{warning}
+                      </p>
+                    ))}
+                  </div>
                 ))}
             </details>
           )}
         </section>
       )}
+      {scan?.analytics ? (
+        <details className="ws-radar-data-details" open={!report}>
+          <summary>
+            本轮多维证据分析 · {scan.analytics.documentCount} 篇材料 ·{" "}
+            {scan.analytics.clusterCount} 个文本分组
+          </summary>
+          <EvidenceDashboard
+            key={scan.id}
+            analytics={scan.analytics}
+            openDocument={openDocument}
+          />
+        </details>
+      ) : scan && !running ? (
+        <p className="ws-muted">
+          本轮没有保存多维证据统计；新一轮发现会在分析后展示。
+        </p>
+      ) : null}
       {report ? (
         <section aria-label="机会推荐">
           <div className="ws-section-title">
@@ -380,6 +474,174 @@ export function WorkspaceRadar({
         )
       )}
     </div>
+  );
+}
+function EvidenceDashboard({
+  analytics,
+  openDocument,
+}: {
+  analytics: RadarAnalytics;
+  openDocument: (id: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const visibleClusters = showAll
+    ? analytics.clusters
+    : analytics.clusters.slice(0, 8);
+  return (
+    <section className="ws-panel ws-radar-analytics" aria-label="多维证据看板">
+      <div className="ws-section-title">
+        <div>
+          <span className="ws-kicker">EVIDENCE EXPLORER</span>
+          <h2>先看证据，再判断机会</h2>
+          <p>本轮材料的文本统计已就绪，无需等待模型推荐。</p>
+        </div>
+        <span className="ws-tag">TF-IDF 文本相似分组</span>
+      </div>
+      <div className="ws-coverage-grid ws-radar-analytics-counts">
+        {[
+          ["分析材料", analytics.documentCount],
+          ["去重内容", analytics.uniqueContentCount],
+          ["文本分组", analytics.clusterCount],
+          ["来源平台", Object.keys(analytics.sourceCounts).length],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <strong>{value}</strong>
+            <small>{label}</small>
+          </div>
+        ))}
+      </div>
+      <div className="ws-radar-sources">
+        {Object.entries(analytics.sourceCounts).map(([source, count]) => (
+          <span className="ws-tag" key={source}>
+            {source} · {count} 篇
+          </span>
+        ))}
+      </div>
+      <p className="ws-radar-analytics-note">
+        分数仅表示优先检查证据的顺序，不代表产品可行性、商业价值或已验证的付费意愿。
+        文本相似可能来自共同用词，请展开原文核对；账号数不等于独立真实人数。
+      </p>
+      <div className="ws-radar-clusters">
+        {visibleClusters.map((cluster) => (
+          <EvidenceClusterCard
+            key={cluster.id}
+            cluster={cluster}
+            openDocument={openDocument}
+          />
+        ))}
+      </div>
+      {analytics.clusters.length > 8 && (
+        <button
+          className="ws-text ws-radar-cluster-toggle"
+          onClick={() => setShowAll((value) => !value)}
+          aria-expanded={showAll}
+        >
+          {showAll
+            ? "收起其余分组"
+            : `展开其余 ${analytics.clusters.length - 8} 个分组`}
+        </button>
+      )}
+      {!analytics.clusters.length && (
+        <p className="ws-muted">本轮没有可展示的文本分组。</p>
+      )}
+      {analytics.limitations.length > 0 && (
+        <details className="ws-radar-plan">
+          <summary>统计方法与数据局限</summary>
+          <ul>
+            {evidenceMethodNotes.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+function EvidenceClusterCard({
+  cluster,
+  openDocument,
+}: {
+  cluster: EvidenceCluster;
+  openDocument: (id: string) => void;
+}) {
+  const dimensions = [
+    ["重复出现", cluster.dimensions.recurrence],
+    ["跨来源", cluster.dimensions.crossSource],
+    ["近 30 天占比", cluster.dimensions.recency],
+    ["痛点词", cluster.dimensions.pain],
+    ["商业词", cluster.dimensions.commercial],
+    ["使用阻力词", cluster.dimensions.friction],
+  ] as const;
+  return (
+    <article className="ws-radar-cluster">
+      <header>
+        <div>
+          <h3>{cluster.label}</h3>
+          <p>
+            {cluster.documentIds.length} 篇材料 · {cluster.independentAccounts}{" "}
+            个来源账号 · {cluster.sourceCount} 个平台
+          </p>
+        </div>
+        <div className="ws-radar-inspection-score">
+          <strong>
+            {Math.round(cluster.evidenceScore)}
+            <small>/100</small>
+          </strong>
+          <span>证据检查优先分</span>
+        </div>
+      </header>
+      <p className="ws-muted">
+        {cluster.sourceNames.join(" / ") || "来源待确认"}
+      </p>
+      <dl className="ws-radar-dimensions">
+        {dimensions.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value === null ? "未知" : `${Math.round(value)} / 100`}</dd>
+            {value !== null && (
+              <meter
+                min={0}
+                max={100}
+                value={value}
+                aria-label={`${label}指标`}
+              />
+            )}
+          </div>
+        ))}
+      </dl>
+      <p className="ws-radar-cluster-counts">
+        近 30 天材料 {cluster.recentCount} · 痛点提及 {cluster.painMentions} ·
+        商业提及 {cluster.commercialMentions} · 使用阻力提及{" "}
+        {cluster.frictionMentions}
+      </p>
+      {cluster.unknowns.length > 0 && (
+        <p className="ws-radar-unknowns">
+          <strong>待核实：</strong>
+          {[
+            ...new Set(
+              cluster.unknowns.map(
+                (key) => evidenceUnknownLabels[key] ?? "其他证据缺口",
+              ),
+            ),
+          ].join("；")}
+        </p>
+      )}
+      <details className="ws-radar-plan">
+        <summary>查看分组原文（{cluster.documentIds.length}）</summary>
+        <div className="ws-radar-document-buttons">
+          {cluster.documentIds.map((id, index) => (
+            <button
+              className="ws-text"
+              key={id}
+              onClick={() => openDocument(id)}
+              aria-label={`${cluster.label}：查看原文 ${index + 1}`}
+            >
+              原文 {index + 1} <ArrowRight size={13} />
+            </button>
+          ))}
+        </div>
+      </details>
+    </article>
   );
 }
 function RecommendationCard({

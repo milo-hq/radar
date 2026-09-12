@@ -1,3 +1,4 @@
+import { analyzeDocuments, extractionBatches } from "./data-engine.js";
 import { publishReviewedReport } from "./quality.js";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
@@ -75,7 +76,8 @@ export function sourceLines(docs: any[]) {
         url: d.canonical_url,
         source: d.source_id,
         author: d.author_name,
-        authorExternalId: d.author_external_id,
+        authorExternalId:
+          d.source_id === "wordpress" ? null : d.author_external_id,
         quote,
       }))
       .filter((l) => l.quote.trim().length > 0),
@@ -140,7 +142,11 @@ export async function advanceScans(db: Pool) {
           reporting: "RADAR_REPORT",
         } as Record<string, string>
       )[scan.status];
-      const stage = jobs.filter((j) => j.type === stageType);
+      const stage = jobs.filter(
+        (j) =>
+          j.type === stageType ||
+          (scan.status === "analyzing" && j.type === "RADAR_ANALYZE"),
+      );
       if (
         !stage.length ||
         stage.some((j) => ["pending", "running"].includes(j.status))
@@ -167,22 +173,20 @@ export async function advanceScans(db: Pool) {
           await emptyReport(c, scan.id, coverage);
           continue;
         }
-        for (let i = 0; i < eligible.length; i += 30)
-          await enqueue(
-            c,
-            "RADAR_EXTRACT",
-            {
-              scanId: scan.id,
-              documentIds: eligible.slice(i, i + 30).map((d) => d.id),
-            },
-            `radar-extract:${scan.id}:${i}`,
-          );
+        await enqueue(
+          c,
+          "RADAR_ANALYZE",
+          { scanId: scan.id, documentIds: eligible.map((d) => d.id) },
+          `radar-analyze:${scan.id}`,
+        );
         await c.query(
           "UPDATE radar_scans SET status='analyzing',coverage=$2,updated_at=now() WHERE id=$1",
           [scan.id, JSON.stringify(coverage)],
         );
       } else {
-        const successful = stage.filter((j) => j.status === "succeeded");
+        const successful = stage.filter(
+          (j) => j.type === "RADAR_EXTRACT" && j.status === "succeeded",
+        );
         if (!successful.length) {
           await c.query(
             "UPDATE radar_scans SET status='failed',error='所有需求分析批次失败，请检查模型配置或稍后重试。',updated_at=now() WHERE id=$1",
@@ -227,6 +231,7 @@ export async function runRadarJob(
   job: Job,
   provider: LLMProvider,
   model: string,
+  engine: { analyze?: typeof analyzeDocuments } = {},
 ) {
   if (
     !(
@@ -244,6 +249,29 @@ export async function runRadarJob(
       { promptName, promptVersion: "v1", model, input },
       schema,
     );
+  if (job.type === "RADAR_ANALYZE") {
+    const docs = (
+      await db.query(
+        "SELECT * FROM raw_documents WHERE id=ANY($1::uuid[]) ORDER BY id",
+        [job.payload.documentIds],
+      )
+    ).rows;
+    const analytics = await (engine.analyze ?? analyzeDocuments)(docs);
+    await save(db, job, async (c) => {
+      for (const [index, documentIds] of extractionBatches(analytics).entries())
+        await enqueue(
+          c,
+          "RADAR_EXTRACT",
+          { scanId: job.payload.scanId, documentIds },
+          `radar-extract:${job.payload.scanId}:${index}`,
+        );
+      await c.query(
+        "UPDATE radar_scans SET analytics=$2,updated_at=now() WHERE id=$1",
+        [job.payload.scanId, JSON.stringify(analytics)],
+      );
+    });
+    return;
+  }
   if (job.type === "RADAR_PLAN") {
     const previous = (
       await db.query(
@@ -266,7 +294,13 @@ export async function runRadarJob(
     );
     await save(db, job, async (c) => {
       for (const q of value.queries)
-        for (const source of ["hn", "github", "stackoverflow"]) {
+        for (const source of [
+          "hn",
+          "github",
+          "stackoverflow",
+          "appstore",
+          "wordpress",
+        ]) {
           const child = await enqueue(
             c,
             "DISCOVER_TOPIC",
@@ -387,7 +421,19 @@ export async function runRadarJob(
       ?.profile ?? {};
   const { value } = await run(
     "radar-report",
-    { findings, coverage: scan.coverage, preferences, founder },
+    {
+      findings,
+      coverage: scan.coverage,
+      preferences,
+      founder,
+      analytics: scan.analytics
+        ? {
+            ...scan.analytics,
+            clusters: scan.analytics.clusters.slice(0, 50),
+            note: "仅传入前50个文本统计分组；并非商业价值排名",
+          }
+        : null,
+    },
     schema,
   );
   // A second pass examines the draft against the original evidence, not its own claims.
@@ -402,7 +448,15 @@ export async function runRadarJob(
     throw Error("自动发现任务租约失效");
   const { value: reviewed } = await run(
     "radar-audit",
-    { draft: value, findings, founder, coverage: scan.coverage },
+    {
+      draft: value,
+      findings,
+      founder,
+      coverage: scan.coverage,
+      analytics: scan.analytics
+        ? { ...scan.analytics, clusters: scan.analytics.clusters.slice(0, 50) }
+        : null,
+    },
     schema,
   );
   const approved = publishReviewedReport(

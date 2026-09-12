@@ -8,6 +8,8 @@ export const rawDocumentSchema = z.object({
     "hn",
     "github",
     "stackoverflow",
+    "appstore",
+    "wordpress",
   ]),
   externalId: z.string().min(1).max(1000),
   canonicalUrl: z.url(),

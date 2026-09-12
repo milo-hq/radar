@@ -32,11 +32,15 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-}
       TRANSLATION_BASE_URL: ${TRANSLATION_BASE_URL:-https://api.openai.com/v1}
+      DATA_ENGINE_URL: http://data-engine:8000
       REDDIT_ACCESS_TOKEN: ${REDDIT_ACCESS_TOKEN:-}
       REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-VentureRadar/0.1}
     depends_on:
       migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+  data-engine:
+    build: ./services/data-engine
     restart: unless-stopped
   worker:
     build: .
@@ -47,9 +51,12 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-}
       TRANSLATION_BASE_URL: ${TRANSLATION_BASE_URL:-https://api.openai.com/v1}
+      DATA_ENGINE_URL: http://data-engine:8000
       REDDIT_ACCESS_TOKEN: ${REDDIT_ACCESS_TOKEN:-}
       REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-VentureRadar/0.1}
     depends_on:
+      data-engine:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped

@@ -116,6 +116,8 @@ export async function buildApp(db: Pool) {
             "hn",
             "github",
             "stackoverflow",
+            "appstore",
+            "wordpress",
           ])
           .default("all"),
         offset: z.coerce.number().int().min(0).default(0),

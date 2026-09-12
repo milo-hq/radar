@@ -13,6 +13,8 @@ export function SourceCoverage({ summary }: { summary: any }) {
     hn: "Hacker News 评论",
     github: "GitHub Issues",
     stackoverflow: "Stack Overflow",
+    appstore: "App Store 用户评论",
+    wordpress: "WordPress 插件评价",
     manual: "手动网页",
     reddit: "Reddit",
   };

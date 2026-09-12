@@ -593,6 +593,8 @@ function Documents({
           <option value="reddit">Reddit 讨论</option>
           <option value="github">GitHub Issues</option>
           <option value="stackoverflow">Stack Overflow</option>
+          <option value="appstore">App Store 用户评论</option>
+          <option value="wordpress">WordPress 插件评价</option>
           <option value="hn">Hacker News</option>
           <option value="manual">手动网页</option>
         </select>

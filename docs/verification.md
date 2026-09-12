@@ -120,3 +120,11 @@ Docker Compose 已实际启动：API、Worker、PostgreSQL 17 + pgvector。基�
 - 真实模型初稿与二次复核仍夸大机构采购OSINT和宽泛RPA需求，不能作为可靠商业建议。新增确定性发布规则，过滤机构采购、大范围产品与部分无依据强断言；摘要由实际保留结果生成。对既有实跑结果重用同一发布函数应用规则，旧稿留在audit_logs。本轮最终0项推荐。这不证明没有市场，只表示本轮证据不支持推荐。规则仍有限，后续需提高采集覆盖和语义判断质量。
 - `npm test` 14通过；`npm run test:db` 44通过（含13项雷达流程/复核/发布规则测试）；typecheck/build通过；Playwright4通过。新首页无主题启动、推荐渲染及移动端通过；实际最终页面无JS错误，1440/390宽度无横向溢出。
 - Docker迁移/API/Worker已更新。界面截图在本机 `.local/autonomous-radar-final.png`，不提交。
+
+## 2026-09-12 Python采集与多维分析
+
+- FastAPI/Polars/scikit-learn/HTTPX数据引擎已在Docker内部运行，生产Node Worker调用Python后保存analytics并推进模型提取/报告。API不向公网暴露Python端口。
+- 实际扫描 `037fb366-f737-43eb-a6be-107938aa1ac0` 完成：113份材料（WordPress65、HN42、GitHub5、SO1），排除已解决2份，111份进入Python与模型分析，110个文本相似分组，4项探索假设。Apple三个任务空结果、一个502失败，未计作有效评论。词法分组多数仍为单条，不代表已经具备跨语言语义聚类能力。
+- 复制内容来源/日期/作者冲突采用保守计数；长正文传完整SHA256避免截断误去重；WordPress RSS显示名不伪造已验证账号。最终规则重算本轮111份统计约230ms（本机单轮观察，不是性能保证），旧统计/报告保留于audit_logs。
+- `npm test` 18通过，`npm run test:db`45通过，Python31通过（本地和Docker），Playwright5通过，typecheck/build通过。覆盖Python接口、资料集合完整性、长文指纹、失效租约、渠道部分失败、空日期、复制内容、XML限制、UI未有报告时显示统计与移动端布局。
+- 页面无JS错误，1440/390宽度无横向溢出；推荐生成后统计默认折叠，优先看产品建议。截图在本机 `.local/python-evidence-desktop.png` / mobile，不提交。

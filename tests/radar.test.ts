@@ -147,7 +147,7 @@ const recommendation = (findingIds: string[]) => ({
   findingIds,
 });
 
-test("concurrent scan starts share one plan; planning creates all 12 distinct collection jobs", async () => {
+test("concurrent scan starts share one plan; planning creates all 20 distinct collection jobs", async () => {
   const ids = await Promise.all(Array.from({ length: 8 }, () => startScan(db)));
   assert.equal(new Set(ids).size, 1);
   const id = ids[0];
@@ -162,12 +162,18 @@ test("concurrent scan starts share one plan; planning creates all 12 distinct co
   );
   assert.equal((await state(id)).status, "collecting");
   const children = await jobs(id, "DISCOVER_TOPIC");
-  assert.equal(children.length, 12);
+  assert.equal(children.length, 20);
   assert.equal(
     new Set(children.map((j) => `${j.payload.source}:${j.payload.query}`)).size,
-    12,
+    20,
   );
-  for (const source of ["hn", "github", "stackoverflow"])
+  for (const source of [
+    "hn",
+    "github",
+    "stackoverflow",
+    "appstore",
+    "wordpress",
+  ])
     assert.equal(children.filter((j) => j.payload.source === source).length, 4);
   assert.ok(children.every((j) => j.max_attempts === 1));
   assert.equal(await startScan(db), id);
@@ -204,6 +210,20 @@ test("every eligible document reaches a batch and coverage counts only successfu
   await link(collector, docs);
   await job(id, "DISCOVER_TOPIC", {}, "failed");
   await advanceScans(db);
+  assert.equal((await jobs(id, "RADAR_EXTRACT")).length, 0);
+  await advanceScans(db);
+  assert.equal((await state(id)).status, "analyzing");
+  const analysisJob = (await jobs(id, "RADAR_ANALYZE"))[0];
+  await runRadarJob(
+    db,
+    await claimed(analysisJob),
+    provider(() => {
+      throw Error("Python stage must not call LLM");
+    }),
+    model,
+    { analyze: async (rows) => fakeAnalytics(rows) },
+  );
+  assert.equal((await state(id)).analytics.documentCount, 65);
   const batches = await jobs(id, "RADAR_EXTRACT");
   assert.deepEqual(
     batches.map((j) => j.payload.documentIds.length).sort((a, b) => a - b),
@@ -637,4 +657,81 @@ test("publication gate emits a conservative no-build report when every audited r
   assert.deepEqual(result.report.recommendations, []);
   assert.match(result.report.summary, /暂不建议投入开发/);
   assert.match(result.report.rejectedSummary, /另排除 1 项/);
+});
+
+function fakeAnalytics(rows: any[]) {
+  return {
+    version: "1" as const,
+    documentCount: rows.length,
+    uniqueContentCount: rows.length,
+    clusterCount: 1,
+    sourceCounts: { github: rows.length },
+    clusters: [
+      {
+        id: "cluster-test",
+        label: "workflow",
+        documentIds: rows.map((r) => r.id),
+        independentAccounts: rows.length,
+        sourceCount: 1,
+        sourceNames: ["github"],
+        recentCount: 0,
+        painMentions: 0,
+        commercialMentions: 0,
+        frictionMentions: 0,
+        evidenceScore: 0,
+        dimensions: {
+          recurrence: 0,
+          crossSource: 0,
+          recency: null,
+          pain: 0,
+          commercial: 0,
+          friction: 0,
+        },
+        unknowns: ["verified_willingness_to_pay"],
+      },
+    ],
+    limitations: ["test fixture"],
+  };
+}
+test("Python stage is lease fenced and engine failures cannot publish analytics", async () => {
+  const id = await scan("analyzing"),
+    docs = await documents(2);
+  const j = await claimed(
+    await job(id, "RADAR_ANALYZE", { documentIds: docs.map((d) => d.id) }),
+  );
+  await assert.rejects(
+    runRadarJob(
+      db,
+      j,
+      provider(() => null),
+      model,
+      {
+        analyze: async () => {
+          throw Error("engine offline");
+        },
+      },
+    ),
+    /engine offline/,
+  );
+  assert.equal((await state(id)).analytics, null);
+  assert.equal((await jobs(id, "RADAR_EXTRACT")).length, 0);
+  await assert.rejects(
+    runRadarJob(
+      db,
+      j,
+      provider(() => null),
+      model,
+      {
+        analyze: async (rows) => {
+          await db.query(
+            "UPDATE jobs SET lock_token=gen_random_uuid() WHERE id=$1",
+            [j.id],
+          );
+          return fakeAnalytics(rows);
+        },
+      },
+    ),
+    /租约失效/,
+  );
+  assert.equal((await state(id)).analytics, null);
 });

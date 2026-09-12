@@ -35,6 +35,8 @@ export function DocumentList({
                           hn: "Hacker News",
                           github: "GitHub Issues",
                           stackoverflow: "Stack Overflow",
+                          appstore: "App Store 用户评论",
+                          wordpress: "WordPress 插件评价",
                         } as Record<string, string>
                       )[d.source_id] || "MANUAL"}
               </Badge>

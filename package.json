@@ -12,11 +12,12 @@
     "worker": "tsx apps/worker/src/worker.ts",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/core.test.ts tests/feedback.test.ts tests/comparison.test.ts tests/topic.test.ts tests/localization.test.ts",
+    "test": "tsx --test tests/core.test.ts tests/feedback.test.ts tests/comparison.test.ts tests/topic.test.ts tests/localization.test.ts tests/data-engine.test.ts",
     "test:db": "tsx --test --test-concurrency=1 tests/db.test.ts tests/api.test.ts tests/translation.test.ts tests/opportunities.test.ts tests/research.test.ts tests/radar.test.ts",
     "db:migrate": "tsx packages/db/src/migrate.ts",
     "db:local": "bash scripts/local-db.sh",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "test:python": "PYTHONPATH=services/data-engine .local/python-venv/bin/python -m unittest discover -s services/data-engine/tests -v"
   },
   "dependencies": {
     "@fastify/static": "^10.1.3",

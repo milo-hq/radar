@@ -1600,6 +1600,114 @@
 .ws-radar-spin {
   animation: ws-radar-spin 1.5s linear infinite;
 }
+.ws-radar-analytics-counts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ws-radar-analytics-note,
+.ws-radar-cluster-counts,
+.ws-radar-unknowns {
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.ws-radar-analytics-note {
+  margin: 20px 0;
+  color: #687563;
+}
+.ws-radar-clusters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.ws-radar-cluster {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: #fcfdf9;
+}
+.ws-radar-cluster > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+}
+.ws-radar-cluster > header > div:first-child {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.ws-radar-cluster h3 {
+  font-size: 15px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ws-radar-cluster header p {
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 8px 0 0;
+  color: #687563;
+}
+.ws-radar-inspection-score {
+  display: grid;
+  gap: 4px;
+  color: #305a42;
+}
+.ws-radar-inspection-score strong {
+  font-size: 25px;
+}
+.ws-radar-inspection-score small,
+.ws-radar-inspection-score span {
+  font-size: 10px;
+  font-weight: 400;
+}
+.ws-radar-dimensions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px 12px;
+  margin: 20px 0;
+}
+.ws-radar-dimensions > div {
+  min-width: 0;
+}
+.ws-radar-dimensions dt {
+  font-size: 11px;
+  color: #687563;
+}
+.ws-radar-dimensions dd {
+  margin: 6px 0;
+  font-size: 12px;
+}
+.ws-radar-dimensions meter {
+  display: block;
+  width: 100%;
+  height: 7px;
+  accent-color: #658960;
+}
+.ws-radar-unknowns {
+  padding: 10px 12px;
+  background: #f4f3e9;
+  border-radius: 5px;
+  color: #786442;
+}
+.ws-radar-document-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 14px 0 4px;
+}
+.ws-radar-document-buttons button {
+  min-height: 32px;
+}
+.ws-radar-cluster-toggle {
+  margin-top: 20px;
+}
+@media (max-width: 900px) {
+  .ws-radar-clusters {
+    grid-template-columns: 1fr;
+  }
+}
 @keyframes ws-radar-spin {
   to {
     transform: rotate(360deg);
@@ -1625,6 +1733,12 @@
   }
 }
 @media (max-width: 640px) {
+  .ws-radar-analytics-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ws-radar-cluster {
+    padding: 16px;
+  }
   .ws-radar-hero {
     padding: 24px;
   }
@@ -1655,4 +1769,17 @@
   .ws-sidebar nav {
     justify-content: flex-start;
   }
+}
+
+.ws-radar-data-details > summary {
+  cursor: pointer;
+  padding: 18px 22px;
+  border: 1px solid var(--ws-line, #dce4dd);
+  border-radius: 10px;
+  color: #325548;
+  font-weight: 600;
+  background: #fff;
+}
+.ws-radar-data-details[open] > summary {
+  margin-bottom: 14px;
 }
