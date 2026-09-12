@@ -2,6 +2,15 @@ import { z } from "zod";
 import type { Pool, PoolClient } from "pg";
 const text = z.string().max(6000).default("");
 export const dossierSchema = z.object({
+  opportunityType: z.enum(["workflow", "localization"]).default("workflow"),
+  sourceMarket: text,
+  targetMarket: text,
+  entryMarket: text,
+  sourceSuccess: text,
+  localAlternatives: text,
+  localDemand: text,
+  localizationStrategy: text,
+  transferRisks: text,
   customer: text,
   buyer: text,
   job: text,
@@ -35,9 +44,21 @@ export const claimSchema = z.object({
   statement: z.string().trim().min(1).max(6000),
   quote: z.string().min(1).max(12000),
 });
-export function readiness(claims: any[]) {
+export function readiness(claims: any[], dossier: any = {}) {
   const accepted = claims.filter((c) => c.review_status === "accepted");
   const missing = [];
+  if (dossier.opportunityType === "localization") {
+    const a = (dossier.sourceMarket ?? "").trim().toLowerCase(),
+      b = (dossier.targetMarket ?? "").trim().toLowerCase();
+    if (!a || !b || a === b) missing.push("请填写不同的来源地区A与目标地区B");
+    if (
+      !accepted.some((c) => c.kind === "revenue" && c.market_role === "source")
+    )
+      missing.push("缺少人工确认的A地区收入证据（不能只用定价证明成功）");
+    if (!accepted.some((c) => c.kind === "pain" && c.market_role === "target"))
+      missing.push("缺少人工确认的B地区需求/痛点证据");
+    return { ready: missing.length === 0, missing };
+  }
   if (!accepted.some((c) => ["market", "revenue"].includes(c.kind)))
     missing.push("缺少人工确认的产品 / 商业证据");
   if (!accepted.some((c) => c.kind === "pain"))
@@ -54,11 +75,11 @@ export async function getOpportunity(db: Pool | PoolClient, id: string) {
   if (!o) return null;
   o.claims = (
     await db.query(
-      "SELECT c.*,oc.review_status,d.canonical_url url,d.collected_at FROM opportunity_claims oc JOIN evidence_claims c ON c.id=oc.claim_id JOIN raw_documents d ON d.id=c.raw_document_id WHERE oc.opportunity_id=$1 ORDER BY c.created_at",
+      "SELECT c.*,oc.review_status,oc.market_role,d.canonical_url url,d.collected_at FROM opportunity_claims oc JOIN evidence_claims c ON c.id=oc.claim_id JOIN raw_documents d ON d.id=c.raw_document_id WHERE oc.opportunity_id=$1 ORDER BY c.created_at",
       [id],
     )
   ).rows;
-  o.readiness = readiness(o.claims);
+  o.readiness = readiness(o.claims, o.dossier);
   o.decisions = (
     await db.query(
       "SELECT * FROM opportunity_decisions WHERE opportunity_id=$1 ORDER BY created_at DESC",

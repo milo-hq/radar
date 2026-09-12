@@ -388,3 +388,104 @@ test("comparison persists a complete snapshot, forces unknown founder fit, and d
     await app.close();
   }
 });
+
+test("changing localization market clears per-opportunity market roles", async () => {
+  const app = await buildApp(db);
+  try {
+    const p = (
+      await app.inject({
+        method: "POST",
+        url: "/api/products",
+        payload: {
+          name: "Localization fixture",
+          url: "https://example.com/" + crypto.randomUUID(),
+        },
+      })
+    ).json();
+    const [doc] = await saveDocuments(db, [
+      {
+        sourceKey: "manual",
+        externalId: crypto.randomUUID(),
+        canonicalUrl: "https://example.com/localization",
+        type: "article",
+        body: "I spend hours on this task in Germany.",
+        metadata: { test: true },
+      },
+    ]);
+    const claim = (
+      await app.inject({
+        method: "POST",
+        url: "/api/claims",
+        payload: {
+          productId: p.id,
+          documentId: doc.id,
+          kind: "pain",
+          statement: "Local pain",
+          quote: "I spend hours on this task in Germany.",
+        },
+      })
+    ).json();
+    const o = (
+      await app.inject({
+        method: "POST",
+        url: "/api/opportunities",
+        payload: {
+          productId: p.id,
+          title: "Localization test",
+          dossier: {
+            opportunityType: "localization",
+            sourceMarket: "美国",
+            targetMarket: "德国",
+          },
+        },
+      })
+    ).json();
+    await app.inject({
+      method: "POST",
+      url: `/api/opportunities/${o.id}/claims`,
+      payload: { claimId: claim.id },
+    });
+    await app.inject({
+      method: "PATCH",
+      url: `/api/claims/${claim.id}`,
+      payload: {
+        opportunityId: o.id,
+        reviewStatus: "accepted",
+        marketRole: "target",
+      },
+    });
+    assert.equal(
+      (await app.inject(`/api/opportunities/${o.id}`)).json().claims[0]
+        .market_role,
+      "target",
+    );
+    await app.inject({
+      method: "PATCH",
+      url: `/api/opportunities/${o.id}`,
+      payload: {
+        dossier: {
+          opportunityType: "localization",
+          sourceMarket: "美国",
+          targetMarket: "阿联酋",
+        },
+      },
+    });
+    const after = (await app.inject(`/api/opportunities/${o.id}`)).json();
+    assert.equal(after.claims[0].market_role, "general");
+    assert.equal(after.readiness.ready, false);
+    assert.equal(
+      (
+        await app.inject({
+          method: "POST",
+          url: `/api/products/${p.id}/research`,
+          payload: {
+            localization: { sourceMarket: "美国", targetMarket: "美国" },
+          },
+        })
+      ).statusCode,
+      400,
+    );
+  } finally {
+    await app.close();
+  }
+});

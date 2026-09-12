@@ -5,6 +5,7 @@ import {
   decisionNames,
   emptyDossier,
   fields,
+  localizationFields,
   kinds,
   reviews,
   Status,
@@ -164,8 +165,28 @@ export function WorkspaceDetail({
                     onChange={(e) => setTitle(e.target.value)}
                   />
                 </label>
+                <label>
+                  机会类型
+                  <select
+                    value={dossier.opportunityType ?? "workflow"}
+                    onChange={(e) =>
+                      setDossier({
+                        ...dossier,
+                        opportunityType: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="workflow">现有产品周边的工作流机会</option>
+                    <option value="localization">跨地区本地化机会</option>
+                  </select>
+                </label>
                 <div className="ws-fields">
-                  {fields.map(([key, label, placeholder]) => (
+                  {[
+                    ...fields,
+                    ...(dossier.opportunityType === "localization"
+                      ? localizationFields
+                      : []),
+                  ].map(([key, label, placeholder]) => (
                     <label key={key}>
                       {label}
                       <textarea
@@ -215,7 +236,20 @@ export function WorkspaceDetail({
               </form>
             ) : (
               <dl className="ws-dossier">
-                {fields.map(([key, label]) => (
+                <div>
+                  <dt>机会类型</dt>
+                  <dd>
+                    {o.dossier.opportunityType === "localization"
+                      ? "跨地区本地化"
+                      : "工作流机会"}
+                  </dd>
+                </div>
+                {[
+                  ...fields,
+                  ...(o.dossier.opportunityType === "localization"
+                    ? localizationFields
+                    : []),
+                ].map(([key, label]) => (
                   <div key={key}>
                     <dt>{label}</dt>
                     <dd className={!o.dossier?.[key] ? "ws-unknown" : ""}>
@@ -305,6 +339,39 @@ export function WorkspaceDetail({
                 </div>
                 <h3>{c.statement}</h3>
                 <blockquote>{c.quote}</blockquote>
+                {o.dossier.opportunityType === "localization" && (
+                  <label>
+                    证据地区归属
+                    <select
+                      aria-label={"证据地区归属 " + c.id}
+                      value={c.market_role ?? "general"}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void perform(
+                          () =>
+                            api(
+                              "/claims/" + c.id,
+                              {
+                                reviewStatus: c.review_status,
+                                opportunityId: id,
+                                marketRole: e.target.value,
+                              },
+                              "PATCH",
+                            ),
+                          "证据地区归属已更新",
+                        )
+                      }
+                    >
+                      <option value="general">未确定 / 通用</option>
+                      <option value="source">
+                        A：{o.dossier.sourceMarket || "来源地区"}
+                      </option>
+                      <option value="target">
+                        B：{o.dossier.targetMarket || "目标地区"}
+                      </option>
+                    </select>
+                  </label>
+                )}
                 <div className="ws-claim-actions">
                   <button
                     className="ws-text"

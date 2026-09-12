@@ -55,6 +55,7 @@ export default function App() {
     [documentId, setDocumentId] = useState<string | null>(null),
     [opportunityId, setOpportunityId] = useState<string | null>(null),
     [filter, setFilter] = useState("drafts"),
+    [opportunityType, setOpportunityType] = useState("all"),
     [query, setQuery] = useState("");
   const refresh = () => setRevision((n) => n + 1);
   const notice = (s: string) => {
@@ -104,11 +105,23 @@ export default function App() {
     killed = opportunities.filter(isKilled);
   const visible = (
     filter === "drafts" ? drafts : filter === "ready" ? ready : killed
-  ).filter((o) =>
-    (o.title + " " + (o.dossier?.customer || "") + " " + (o.dossier?.gap || ""))
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  )
+    .filter(
+      (o) =>
+        opportunityType === "all" ||
+        (o.dossier.opportunityType ?? "workflow") === opportunityType,
+    )
+    .filter((o) =>
+      (
+        o.title +
+        " " +
+        (o.dossier?.customer || "") +
+        " " +
+        (o.dossier?.gap || "")
+      )
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+    );
   return (
     <div className="workspace">
       <aside className="ws-sidebar">
@@ -316,6 +329,17 @@ export default function App() {
                       />
                     </label>
                   </div>
+                  <label className="ws-type-filter">
+                    机会类型
+                    <select
+                      value={opportunityType}
+                      onChange={(e) => setOpportunityType(e.target.value)}
+                    >
+                      <option value="all">全部类型</option>
+                      <option value="workflow">工作流机会</option>
+                      <option value="localization">跨地区本地化</option>
+                    </select>
+                  </label>
                   <div className="ws-opportunity-list">
                     {visible.map((o) => (
                       <button
@@ -326,6 +350,12 @@ export default function App() {
                         <div className="ws-card-title">
                           <div className="ws-inline">
                             <Status opportunity={o} />
+                            {o.dossier.opportunityType === "localization" && (
+                              <span className="ws-tag">
+                                {o.dossier.sourceMarket} →{" "}
+                                {o.dossier.targetMarket}
+                              </span>
+                            )}
                             <span className="ws-muted">
                               {products.find((p) => p.id === o.product_id)
                                 ?.name || "参考产品待关联"}

@@ -1308,3 +1308,43 @@
   display: block;
   margin-top: 6px;
 }
+.ws-localize {
+  padding: 20px 0;
+  border-top: 1px solid var(--ws-line);
+}
+.ws-localize .ws-inline {
+  flex-wrap: wrap;
+}
+.ws-type-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 18px;
+  font-size: 12px;
+}
+.ws-type-filter select {
+  max-width: 260px;
+}
+.ws-card-title .ws-inline {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ws-card-title .ws-tag {
+  white-space: normal;
+}
+.ws-product {
+  min-width: 0;
+}
+.ws-localize {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ws-localize input {
+  min-width: 0;
+  max-width: 100%;
+}
+.ws-localize .button {
+  white-space: normal;
+  max-width: 100%;
+}

@@ -13,6 +13,7 @@ export async function researchProduct(
     model: string;
     checkLease: () => Promise<boolean>;
     lockToken?: string;
+    localization?: { sourceMarket: string; targetMarket: string };
   },
 ) {
   if (!(await config.checkLease())) throw Error("研究任务租约失效");
@@ -148,6 +149,7 @@ export async function researchProduct(
       input: {
         product: { id: product.id, name: product.name },
         founder,
+        localization: config.localization ?? null,
         documents: coverage,
         claims,
       },
@@ -155,6 +157,23 @@ export async function researchProduct(
     proposalSchema,
   );
   for (const proposal of proposalResult.proposals) {
+    proposal.dossier.opportunityType = config.localization
+      ? "localization"
+      : "workflow";
+    if (config.localization) {
+      proposal.dossier.sourceMarket = config.localization.sourceMarket;
+      proposal.dossier.targetMarket = config.localization.targetMarket;
+      proposal.dossier.sourceSuccess =
+        "待核对A地区成功证据：" + proposal.dossier.sourceSuccess;
+      proposal.dossier.localDemand =
+        "待核对B地区需求：" + proposal.dossier.localDemand;
+      proposal.dossier.localAlternatives =
+        "基于当前材料的调查线索，未完成当地竞品调查：" +
+        proposal.dossier.localAlternatives;
+      proposal.dossier.unknowns =
+        "目标地区的需求、竞品和本地化收益尚需当地证据核对。" +
+        proposal.dossier.unknowns;
+    }
     proposal.dossier.gap = "待验证假设：" + proposal.dossier.gap;
     proposal.dossier.unmetNeed =
       "待核对的需求假设：" + proposal.dossier.unmetNeed;

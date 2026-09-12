@@ -106,12 +106,14 @@ test("research never invents quotes and commits only with a valid lease", async 
     provider,
     model: "fixture",
     lockToken: token,
+    localization: { sourceMarket: "美国", targetMarket: "亚洲（不含中国）" },
     checkLease: async () => true,
   });
   await researchProduct(db, p.id, j.id, {
     provider,
     model: "fixture",
     lockToken: token,
+    localization: { sourceMarket: "美国", targetMarket: "亚洲（不含中国）" },
     checkLease: async () => true,
   });
   assert.equal(
@@ -131,6 +133,15 @@ test("research never invents quotes and commits only with a valid lease", async 
   const c = (
     await db.query("SELECT * FROM evidence_claims WHERE product_id=$1", [p.id])
   ).rows[0];
+  const localized = (
+    await db.query(
+      "SELECT dossier FROM opportunities WHERE research_job_id=$1",
+      [j.id],
+    )
+  ).rows[0].dossier;
+  assert.equal(localized.opportunityType, "localization");
+  assert.equal(localized.targetMarket, "亚洲（不含中国）");
+  assert.equal(localized.sourceMarket, "美国");
   assert.equal(c.quote, "A $9 plan exists.");
   assert.equal(c.review_status, "pending");
   assert.equal(c.kind, "market");

@@ -9,6 +9,7 @@ export type Claim = {
   statement: string;
   quote: string;
   review_status: string;
+  market_role?: "general" | "source" | "target";
   url?: string;
 };
 export type Opportunity = {
@@ -60,6 +61,36 @@ export const fields = [
   ["risks", "主要风险", "技术、合规、竞争或依赖风险"],
   ["unknowns", "最大未知", "哪个假设一旦不成立，就不值得继续？"],
 ] as const;
+export const localizationFields = [
+  ["sourceMarket", "来源地区 A", "已有案例在哪个国家或地区？"],
+  ["targetMarket", "目标地区 B", "计划落地的地区；亚洲方向不含中国"],
+  [
+    "entryMarket",
+    "首发国家与选择理由",
+    "从目标区域选择具体国家；明确假设、依据及待调查事项",
+  ],
+  [
+    "sourceSuccess",
+    "A地区成功依据",
+    "收入、付费客户、持续经营等证据；只有定价不能证明成功",
+  ],
+  [
+    "localAlternatives",
+    "B地区竞品与替代方案",
+    "当地产品、跨境可用产品、人工服务；记录调查范围及日期，未发现不等于没有",
+  ],
+  ["localDemand", "B地区真实需求", "当地用户的工作流困难、付费意愿及证据缺口"],
+  [
+    "localizationStrategy",
+    "本地化方案",
+    "语言与界面、支付定价、当地渠道、工作流集成、支持和运营",
+  ],
+  [
+    "transferRisks",
+    "复制与落地风险",
+    "本地获客、持续维护、经营限制、权限与差异化成本；说明待核查项",
+  ],
+] as const;
 export const validationFields = [
   ["test", "最小验证动作"],
   ["budget", "预算上限"],
@@ -87,6 +118,8 @@ export const isKilled = (o: Opportunity) =>
   ["killed", "kill"].includes(o.status.toLowerCase());
 export const emptyDossier = (): Dossier =>
   ({
+    opportunityType: "workflow",
+    ...Object.fromEntries(localizationFields.map(([key]) => [key, ""])),
     ...Object.fromEntries(fields.map(([key]) => [key, ""])),
     validation: Object.fromEntries(validationFields.map(([key]) => [key, ""])),
   }) as Dossier;

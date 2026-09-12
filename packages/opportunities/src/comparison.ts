@@ -60,13 +60,14 @@ export async function comparisonInput(db: Pool, enforceLimit = false) {
             statement: c.statement,
             quote: c.quote,
             review: c.review_status,
+            marketRole: c.market_role,
             url: c.url,
           }))
           .sort((a: any, b: any) => a.id.localeCompare(b.id)),
       };
     }),
   );
-  return { rubricVersion: "v3", founder, items };
+  return { rubricVersion: "v4", founder, items };
 }
 export async function compareOpportunities(
   db: Pool,
@@ -151,9 +152,17 @@ export async function compareOpportunities(
           reason: "创始人资料未填写，无法判断个人匹配度。",
         };
       const claims = input.items.find((x) => x.id === o.id)!.claims;
+      const local =
+        input.items.find((x) => x.id === o.id)!.dossier.opportunityType ===
+        "localization";
       if (
         !claims.some(
-          (c: any) => c.kind === "pain" && c.review !== "rejected",
+          (c: any) =>
+            c.kind === "pain" &&
+            c.review !== "rejected" &&
+            (input.items.find((x) => x.id === o.id)!.dossier.opportunityType !==
+              "localization" ||
+              c.marketRole === "target"),
         ) &&
         o.demand.score != null &&
         o.demand.score > 2
@@ -174,7 +183,12 @@ export async function compareOpportunities(
       if (o.differentiation === "overlap" || priorityBlocker)
         calculated.score = null;
       if (
-        !claims.some((c: any) => c.kind === "pain" && c.review === "accepted")
+        !claims.some(
+          (c: any) =>
+            c.kind === "pain" &&
+            c.review === "accepted" &&
+            (!local || c.marketRole === "target"),
+        )
       )
         o.nextStep =
           "先核对已有功能，并通过不写代码的需求访谈验证痛点；以下是模型后续草案，暂不投入开发：" +
@@ -184,11 +198,17 @@ export async function compareOpportunities(
         ...calculated,
         priorityBlocker,
         acceptedPain: claims.filter(
-          (c: any) => c.kind === "pain" && c.review === "accepted",
+          (c: any) =>
+            c.kind === "pain" &&
+            c.review === "accepted" &&
+            (!local || c.marketRole === "target"),
         ).length,
         acceptedCommercial: claims.filter(
           (c: any) =>
-            ["market", "revenue"].includes(c.kind) && c.review === "accepted",
+            (local
+              ? c.kind === "revenue" && c.marketRole === "source"
+              : ["market", "revenue"].includes(c.kind)) &&
+            c.review === "accepted",
         ).length,
       };
     })

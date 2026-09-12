@@ -167,6 +167,7 @@ while (!stop) {
           provider: new CompatibleProvider(config),
           model: config.model,
           lockToken: job.lock_token,
+          localization: job.payload.localization,
           checkLease: async () =>
             !!(
               await pool.query(

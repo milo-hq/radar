@@ -137,6 +137,17 @@ export function registerOpportunities(app: FastifyInstance, db: Pool) {
         ])
       ).rows[0];
       if (!old) error("机会不存在", 404);
+      if (
+        b.dossier &&
+        ["opportunityType", "sourceMarket", "targetMarket"].some(
+          (k) => (b.dossier as any)[k] !== old.dossier[k],
+        )
+      ) {
+        await c.query(
+          "UPDATE opportunity_claims SET market_role='general' WHERE opportunity_id=$1",
+          [old.id],
+        );
+      }
       await c.query(
         "UPDATE opportunities SET title=$2,dossier=$3,updated_at=now() WHERE id=$1",
         [
@@ -190,13 +201,14 @@ export function registerOpportunities(app: FastifyInstance, db: Pool) {
       .object({
         reviewStatus: z.enum(["accepted", "rejected", "pending"]),
         opportunityId: z.uuid().optional(),
+        marketRole: z.enum(["general", "source", "target"]).optional(),
       })
       .parse(r.body);
     return transaction(db, async (c) => {
       if (b.opportunityId) {
         const linked = await c.query(
-          "UPDATE opportunity_claims SET review_status=$3 WHERE opportunity_id=$1 AND claim_id=$2 RETURNING claim_id",
-          [b.opportunityId, idOf(r), b.reviewStatus],
+          "UPDATE opportunity_claims SET review_status=$3,market_role=coalesce($4,market_role) WHERE opportunity_id=$1 AND claim_id=$2 RETURNING claim_id",
+          [b.opportunityId, idOf(r), b.reviewStatus, b.marketRole ?? null],
         );
         if (!linked.rowCount) error("机会未关联该声明", 404);
       }
@@ -334,6 +346,22 @@ export function registerOpportunities(app: FastifyInstance, db: Pool) {
   });
   app.post("/api/products/:id/research", async (r) => {
     const id = idOf(r);
+    const request = z
+      .object({
+        localization: z
+          .object({
+            sourceMarket: z.string().trim().min(1).max(100),
+            targetMarket: z.string().trim().min(1).max(100),
+          })
+          .optional(),
+      })
+      .parse(r.body ?? {});
+    if (
+      request.localization &&
+      request.localization.sourceMarket.toLowerCase() ===
+        request.localization.targetMarket.toLowerCase()
+    )
+      error("A与B地区必须不同");
     if (!configured()) error("请先配置研究模型（复用中文翻译 API 配置）", 503);
     if (
       !(
@@ -349,15 +377,26 @@ export function registerOpportunities(app: FastifyInstance, db: Pool) {
       ]);
       const active = (
         await c.query(
-          "SELECT id FROM jobs WHERE type='ANALYZE_PRODUCT' AND payload->>'productId'=$1 AND status IN ('pending','running') LIMIT 1",
+          "SELECT id,payload FROM jobs WHERE type='ANALYZE_PRODUCT' AND payload->>'productId'=$1 AND status IN ('pending','running') LIMIT 1",
           [id],
         )
       ).rows[0];
-      if (active) return { jobId: active.id };
+      if (active) {
+        if (
+          JSON.stringify(active.payload.localization ?? null) !==
+          JSON.stringify(request.localization ?? null)
+        )
+          error("该产品有其他研究正在运行，请完成后再发起不同地区研究");
+        return { jobId: active.id };
+      }
       const job = await enqueue(
         c,
         "ANALYZE_PRODUCT",
-        { productId: id, name: "机会研究" },
+        {
+          productId: id,
+          name: request.localization ? "跨地区本地化研究" : "机会研究",
+          localization: request.localization,
+        },
         "research:" + id + ":" + crypto.randomUUID(),
       );
       await c.query("UPDATE jobs SET max_attempts=2 WHERE id=$1", [job.id]);

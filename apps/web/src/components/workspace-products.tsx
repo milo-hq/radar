@@ -23,6 +23,9 @@ export function WorkspaceProducts({
     [url, setUrl] = useState(""),
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
+    [localize, setLocalize] = useState<string | null>(null),
+    [sourceMarket, setSourceMarket] = useState("美国"),
+    [targetMarket, setTargetMarket] = useState("中东"),
     [attach, setAttach] = useState<string | null>(null);
   async function act(key: string, action: () => Promise<unknown>) {
     setBusy(key);
@@ -195,6 +198,67 @@ export function WorkspaceProducts({
                   尚无研究材料。导入官网、定价页或用户讨论，再关联到这里。
                 </p>
               )}
+              {localize === p.id && (
+                <form
+                  className="ws-form ws-localize"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void act("localize-" + p.id, async () => {
+                      await api(`/products/${p.id}/research`, {
+                        localization: { sourceMarket, targetMarket },
+                      });
+                      notice("跨地区本地化研究已排队；结果仍需A/B证据分别核对");
+                      setLocalize(null);
+                    });
+                  }}
+                >
+                  <h3>跨地区本地化研究</h3>
+                  <p className="ws-muted">
+                    借鉴已验证模式，寻找当地差异。A的成功不能证明B的需求；模型不能替代当地竞品调查。
+                  </p>
+                  <div className="ws-inline">
+                    {["中东", "欧洲", "亚洲（不含中国）"].map((region) => (
+                      <button
+                        className="button"
+                        type="button"
+                        key={region}
+                        onClick={() => {
+                          setSourceMarket("美国");
+                          setTargetMarket(region);
+                        }}
+                      >
+                        美国 → {region}
+                      </button>
+                    ))}
+                  </div>
+                  <label>
+                    来源地区 A
+                    <input
+                      required
+                      maxLength={100}
+                      value={sourceMarket}
+                      onChange={(e) => setSourceMarket(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    目标地区 B
+                    <input
+                      required
+                      maxLength={100}
+                      value={targetMarket}
+                      onChange={(e) => setTargetMarket(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="button primary"
+                    disabled={
+                      !!busy || !!pending || !configured || !p.documents?.length
+                    }
+                  >
+                    开始本地化研究
+                  </button>
+                </form>
+              )}
               <div className="ws-product-actions">
                 <button
                   className="button"
@@ -237,6 +301,12 @@ export function WorkspaceProducts({
                     : busy === p.id
                       ? "提交中…"
                       : "研究机会"}
+                </button>
+                <button
+                  className="button"
+                  onClick={() => setLocalize(localize === p.id ? null : p.id)}
+                >
+                  本地化研究
                 </button>
                 <button
                   className="button"
