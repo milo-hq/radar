@@ -384,6 +384,9 @@
   gap: 14px;
 }
 .ws-opportunity-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
   width: 100%;
   border: 1px solid var(--ws-line);
   border-radius: 9px;
@@ -423,13 +426,14 @@
 }
 .ws-card-facts {
   display: grid;
-  grid-template-columns: 1fr 1.7fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 1fr);
   border-top: 1px solid #edf0ea;
   margin-top: 19px;
   padding-top: 17px;
   gap: 24px;
 }
 .ws-card-facts span {
+  min-width: 0;
   font-size: 9px;
   color: #8a9787;
 }
@@ -439,9 +443,9 @@
   font-weight: 400;
   color: #596e58;
   margin-top: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
 }
 .ws-panel {
   background: white;
@@ -917,7 +921,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .ws-card-facts {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .ws-card-facts > span:last-child {
     grid-column: 1/-1;
