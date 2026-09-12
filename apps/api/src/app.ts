@@ -1,3 +1,4 @@
+import { registerRadar } from "./radar.js";
 import { registerDiscovery } from "./discovery.js";
 import { registerOpportunities } from "./opportunities.js";
 import { translationConfig } from "../../../packages/llm/src/compatible.js";
@@ -277,5 +278,6 @@ export async function buildApp(db: Pool) {
   registerTranslations(app, db);
   registerOpportunities(app, db);
   registerDiscovery(app, db);
+  registerRadar(app, db);
   return app;
 }

@@ -73,7 +73,7 @@ test("source inspection, search, review persistence and mobile navigation", asyn
     "Browser QA TypeScript",
   );
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "机会工作台", exact: true }).click();
+  await page.getByRole("button", { name: /^机会工作台/ }).click();
   await expect(page.getByRole("button", { name: "查看参考产品", exact: true }))
     .toBeVisible()
     .catch(async () => {
@@ -236,6 +236,7 @@ test("opportunity evidence review unlocks validation and preserves the decision"
     });
   }
   await page.goto("/");
+  await page.getByRole("button", { name: /^机会工作台/ }).click();
   await page.getByRole("heading", { name: title, exact: true }).click();
   await expect(page.getByText("继续补证，暂存为草稿")).toBeVisible();
   await page
@@ -263,4 +264,89 @@ test("opportunity evidence review unlocks validation and preserves the decision"
     .click();
   await expect(page.getByText("继续补证，暂存为草稿")).toBeVisible();
   await expect(page.locator(".ws-timeline")).toContainText("先验证实际付款");
+});
+
+test("radar starts without a topic and renders ranked evidence on mobile", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  let started = false;
+  const recommendation = {
+    id: "r1",
+    title: "客户资料交接检查助手",
+    buyer: "小型代理公司",
+    problem: "资料反复遗漏",
+    solution: "检查交接清单",
+    whyPriority: "本轮先验证节省人工时间的价值",
+    feasibility: "一个人可先实现文件清单检查",
+    monetization: "按工作区收费，尚待验证",
+    risks: "现有项目管理工具可能覆盖",
+    nextStep: "访谈5名项目负责人，至少3人愿意试用再开发",
+    confidence: "探索假设，证据有限",
+    independentVoices: 1,
+    platforms: ["hn"],
+    evidence: [
+      {
+        documentId: "test-doc",
+        title: "handoff discussion",
+        url: "https://news.ycombinator.com/item?id=123",
+        quote: "We manually check every handoff.",
+        source: "hn",
+        author: "example",
+      },
+    ],
+  };
+  await page.route("**/api/radar", async (route) => {
+    if (route.request().method() === "POST") {
+      expect(route.request().postData()).toBeNull();
+      started = true;
+      await route.fulfill({ json: { scanId: "scan1" } });
+    } else
+      await route.fulfill({
+        json: {
+          configured: true,
+          latest: started
+            ? {
+                id: "scan1",
+                status: "complete",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                plan: { queries: [] },
+                coverage: {
+                  collected: 25,
+                  eligible: 12,
+                  excluded: 10,
+                  duplicates: 3,
+                  analyzed: 12,
+                  failedJobs: 0,
+                  sourceCounts: { hn: 22 },
+                },
+                report: {
+                  summary: "优先验证客户交接流程",
+                  recommendations: [recommendation],
+                  rejectedSummary: "已解决的代码错误不推荐",
+                },
+                jobs: [],
+              }
+            : null,
+        },
+      });
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "自动发现机会", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".ws-radar input")).toHaveCount(0);
+  await page.getByRole("button", { name: "自动发现机会", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "客户资料交接检查助手" }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  expect(errors).toEqual([]);
 });

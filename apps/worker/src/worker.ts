@@ -1,3 +1,7 @@
+import {
+  advanceScans,
+  runRadarJob,
+} from "../../../packages/radar/src/radar.js";
 import { reserveDiscoverySlot } from "../../../packages/db/src/discovery.js";
 import { discoverTopic } from "../../../packages/connectors/src/topic.js";
 import { compareOpportunities } from "../../../packages/opportunities/src/comparison.js";
@@ -33,12 +37,24 @@ console.log("Venture Radar worker ready");
 while (!stop) {
   try {
     await scheduleDue(pool);
+    await advanceScans(pool);
     const job = await claimJob(pool);
     if (!job) {
       await delay(2000);
       continue;
     }
     try {
+      if (job.type.startsWith("RADAR_")) {
+        const config = translationConfig();
+        if (!config) throw Error("尚未配置研究模型");
+        await runRadarJob(
+          pool,
+          job,
+          new CompatibleProvider(config),
+          config.model,
+        );
+        continue;
+      }
       if (job.type === "DISCOVER_TOPIC") {
         const { source, query } = job.payload;
         const cooldown = await reserveDiscoverySlot(pool, source);

@@ -1,3 +1,4 @@
+import { WorkspaceRadar } from "./WorkspaceRadar";
 import { WorkspaceDiscovery } from "./components/workspace-discovery";
 import {
   WorkspaceComparison,
@@ -35,15 +36,16 @@ import {
 } from "./components/workspace-model";
 import "./workspace.css";
 const navigation = [
+  { id: "radar", title: "自动发现", icon: Compass },
   { id: "opportunities", title: "机会工作台", icon: Compass },
-  { id: "discovery", title: "主题发现", icon: Search },
+  { id: "discovery", title: "自定义搜索", icon: Search },
   { id: "comparison", title: "机会比较", icon: Compass },
   { id: "products", title: "参考产品", icon: BookOpen },
   { id: "documents", title: "原文库", icon: FileText },
   { id: "settings", title: "创始人设置", icon: Settings2 },
 ];
 export default function App() {
-  const [page, setPage] = useState("opportunities"),
+  const [page, setPage] = useState("radar"),
     [summary, setSummary] = useState<any>(null),
     [products, setProducts] = useState<any[]>([]),
     [opportunities, setOpportunities] = useState<Opportunity[]>([]),
@@ -130,7 +132,7 @@ export default function App() {
           className="ws-brand"
           onClick={(e) => {
             e.preventDefault();
-            setPage("opportunities");
+            setPage("radar");
             setOpportunityId(null);
           }}
         >
@@ -209,42 +211,51 @@ export default function App() {
             />
           ) : (
             <>
-              <div className="ws-page-heading">
-                <div>
-                  <span className="ws-kicker">
-                    {page === "opportunities"
-                      ? "FROM EVIDENCE TO YOUR NEXT PRODUCT"
-                      : "INDEPENDENT FOUNDER / RESEARCH WORKSPACE"}
-                  </span>
-                  <h1>
-                    {page === "opportunities"
-                      ? "找到值得你做的下一款产品"
-                      : navigation.find((n) => n.id === page)?.title}
-                  </h1>
-                  <p>
-                    {page === "opportunities"
-                      ? "从真实产品出发，找到具体切口；用证据决定下一步。"
-                      : page === "discovery"
-                        ? "按需求主题跨渠道查找真实讨论与新项目。"
-                        : page === "comparison"
-                          ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
-                          : page === "products"
-                            ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
-                            : page === "documents"
-                              ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
-                              : "让每次机会研究考虑你的时间、能力和可承受投入。"}
-                  </p>
+              {page !== "radar" && (
+                <div className="ws-page-heading">
+                  <div>
+                    <span className="ws-kicker">
+                      {page === "opportunities"
+                        ? "FROM EVIDENCE TO YOUR NEXT PRODUCT"
+                        : "INDEPENDENT FOUNDER / RESEARCH WORKSPACE"}
+                    </span>
+                    <h1>
+                      {page === "opportunities"
+                        ? "找到值得你做的下一款产品"
+                        : navigation.find((n) => n.id === page)?.title}
+                    </h1>
+                    <p>
+                      {page === "opportunities"
+                        ? "从真实产品出发，找到具体切口；用证据决定下一步。"
+                        : page === "discovery"
+                          ? "按需求主题跨渠道查找真实讨论与新项目。"
+                          : page === "comparison"
+                            ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
+                            : page === "products"
+                              ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
+                              : page === "documents"
+                                ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
+                                : "让每次机会研究考虑你的时间、能力和可承受投入。"}
+                    </p>
+                  </div>
+                  {page !== "settings" && (
+                    <button
+                      className="button primary"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Plus size={16} />
+                      导入来源
+                    </button>
+                  )}
                 </div>
-                {page !== "settings" && (
-                  <button
-                    className="button primary"
-                    onClick={() => setImportOpen(true)}
-                  >
-                    <Plus size={16} />
-                    导入来源
-                  </button>
-                )}
-              </div>
+              )}
+              {page === "radar" && (
+                <WorkspaceRadar
+                  revision={revision}
+                  openDocument={setDocumentId}
+                  openSettings={() => setPage("settings")}
+                />
+              )}
               {page === "opportunities" && (
                 <>
                   <div className="ws-overview">
