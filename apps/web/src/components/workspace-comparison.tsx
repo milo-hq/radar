@@ -11,6 +11,8 @@ export function SourceCoverage({ summary }: { summary: any }) {
   const names: Record<string, string> = {
     winner: "产品官网 / 定价页",
     hn: "Hacker News 评论",
+    github: "GitHub Issues",
+    stackoverflow: "Stack Overflow",
     manual: "手动网页",
     reddit: "Reddit",
   };
@@ -36,8 +38,8 @@ export function SourceCoverage({ summary }: { summary: any }) {
         按已有产品检索，每次最多40条；单次研究最多使用2篇产品材料与6篇外部材料。数量按来源去重，版本更新不算新增来源。
       </p>
       <p className="ws-muted">
-        尚未接入 GitHub
-        Issues、产品评论站和按需求主题搜索；目前的草稿只代表现有产品池与抽样材料，不能代表全部市场机会。
+        「主题发现」已接入 GitHub Issues、Stack Overflow 与 HN
+        关键词搜索。Reddit、产品评论站尚未接入主题搜索；这些技术社区仍不能代表全部用户。
       </p>
     </section>
   );

@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 export const rawDocumentSchema = z.object({
-  sourceKey: z.enum(["manual", "winner", "reddit", "hn"]),
+  sourceKey: z.enum([
+    "manual",
+    "winner",
+    "reddit",
+    "hn",
+    "github",
+    "stackoverflow",
+  ]),
   externalId: z.string().min(1).max(1000),
   canonicalUrl: z.url(),
   type: z.enum([

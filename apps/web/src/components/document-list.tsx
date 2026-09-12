@@ -30,7 +30,13 @@ export function DocumentList({
                   ? "r/" + (d.subreddit || "reddit")
                   : d.source_id === "winner"
                     ? "WINNER"
-                    : "MANUAL"}
+                    : (
+                        {
+                          hn: "Hacker News",
+                          github: "GitHub Issues",
+                          stackoverflow: "Stack Overflow",
+                        } as Record<string, string>
+                      )[d.source_id] || "MANUAL"}
               </Badge>
               <small>{d.type.toUpperCase()}</small>
               {d.title_zh && <Badge tone="green">AI 中文</Badge>}

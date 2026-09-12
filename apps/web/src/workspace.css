@@ -1229,3 +1229,82 @@
     gap: 12px;
   }
 }
+.ws-channel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.ws-channel input {
+  width: auto !important;
+  min-width: 0 !important;
+}
+.ws-discovery-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+  gap: 20px;
+}
+.ws-discovery-job {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ws-line);
+  padding: 16px 8px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.ws-discovery-job.selected {
+  background: #eef4e9;
+}
+.ws-discovery-job span,
+.ws-discovery-doc small {
+  font-size: 11px;
+  color: #738573;
+}
+.ws-discovery-doc {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--ws-line);
+  overflow-wrap: anywhere;
+}
+.ws-discovery-doc .ws-text {
+  white-space: normal;
+  text-align: left;
+}
+.ws-discovery-doc p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.ws-discovery-doc .ws-inline {
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.ws-coverage-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+@media (max-width: 850px) {
+  .ws-discovery-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ws-channel {
+    white-space: normal;
+  }
+}
+.ws-form .ws-channel {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.ws-discovery-doc .ws-text {
+  display: block;
+  max-width: 100%;
+  line-height: 1.6;
+}
+.ws-discovery-doc small {
+  display: block;
+  margin-top: 6px;
+}

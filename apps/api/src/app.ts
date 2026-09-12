@@ -1,3 +1,4 @@
+import { registerDiscovery } from "./discovery.js";
 import { registerOpportunities } from "./opportunities.js";
 import { translationConfig } from "../../../packages/llm/src/compatible.js";
 import { registerTranslations } from "./translations.js";
@@ -105,7 +106,17 @@ export async function buildApp(db: Pool) {
     const q = z
       .object({
         search: z.string().max(300).default(""),
-        source: z.enum(["all", "manual", "winner", "reddit", "hn"]).default("all"),
+        source: z
+          .enum([
+            "all",
+            "manual",
+            "winner",
+            "reddit",
+            "hn",
+            "github",
+            "stackoverflow",
+          ])
+          .default("all"),
         offset: z.coerce.number().int().min(0).default(0),
       })
       .parse(req.query);
@@ -265,5 +276,6 @@ export async function buildApp(db: Pool) {
   }));
   registerTranslations(app, db);
   registerOpportunities(app, db);
+  registerDiscovery(app, db);
   return app;
 }

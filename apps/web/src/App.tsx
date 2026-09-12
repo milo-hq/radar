@@ -1,3 +1,4 @@
+import { WorkspaceDiscovery } from "./components/workspace-discovery";
 import {
   WorkspaceComparison,
   SourceCoverage,
@@ -35,6 +36,7 @@ import {
 import "./workspace.css";
 const navigation = [
   { id: "opportunities", title: "机会工作台", icon: Compass },
+  { id: "discovery", title: "主题发现", icon: Search },
   { id: "comparison", title: "机会比较", icon: Compass },
   { id: "products", title: "参考产品", icon: BookOpen },
   { id: "documents", title: "原文库", icon: FileText },
@@ -209,13 +211,15 @@ export default function App() {
                   <p>
                     {page === "opportunities"
                       ? "从真实产品出发，找到具体切口；用证据决定下一步。"
-                      : page === "comparison"
-                        ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
-                        : page === "products"
-                          ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
-                          : page === "documents"
-                            ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
-                            : "让每次机会研究考虑你的时间、能力和可承受投入。"}
+                      : page === "discovery"
+                        ? "按需求主题跨渠道查找真实讨论与新项目。"
+                        : page === "comparison"
+                          ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
+                          : page === "products"
+                            ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
+                            : page === "documents"
+                              ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
+                              : "让每次机会研究考虑你的时间、能力和可承受投入。"}
                   </p>
                 </div>
                 {page !== "settings" && (
@@ -406,6 +410,13 @@ export default function App() {
                   />
                 </>
               )}
+              {page === "discovery" && (
+                <WorkspaceDiscovery
+                  revision={revision}
+                  notice={notice}
+                  openDocument={setDocumentId}
+                />
+              )}
               {page === "comparison" && (
                 <WorkspaceComparison
                   revision={revision}
@@ -539,6 +550,8 @@ function Documents({
           <option value="all">全部来源</option>
           <option value="winner">产品官网</option>
           <option value="reddit">Reddit 讨论</option>
+          <option value="github">GitHub Issues</option>
+          <option value="stackoverflow">Stack Overflow</option>
           <option value="hn">Hacker News</option>
           <option value="manual">手动网页</option>
         </select>

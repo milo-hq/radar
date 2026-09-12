@@ -17,7 +17,10 @@ test("summary reports actual opportunity counts without a global activation gate
   assert.equal(result.statusCode, 200);
   const body = result.json();
   assert.equal(body.stage, "OPPORTUNITY_RESEARCH");
-  assert.equal(body.opportunities, (await db.query("SELECT count(*)::int n FROM opportunities")).rows[0].n);
+  assert.equal(
+    body.opportunities,
+    (await db.query("SELECT count(*)::int n FROM opportunities")).rows[0].n,
+  );
   assert.equal(typeof body.documents, "number");
   assert.equal(body.qualityGate.scope, "opportunity");
   assert.equal(body.qualityGate.passed, undefined);
@@ -216,4 +219,63 @@ test("milestone document count does not grow when only a source snapshot changes
   const second = (await app.inject("/api/summary")).json();
   assert.equal(first.documents, second.documents);
   assert.equal(second.snapshots, first.snapshots + 1);
+});
+
+test("topic discovery validates sources and reuses active jobs per query", async () => {
+  const app = await buildApp(db);
+  try {
+    const query = "topic-test-" + crypto.randomUUID();
+    const request = {
+      method: "POST" as const,
+      url: "/api/discovery",
+      payload: { query, sources: ["github", "hn", "stackoverflow"] },
+    };
+    const first = await app.inject(request),
+      second = await app.inject(request);
+    assert.equal(first.statusCode, 200);
+    assert.deepEqual(first.json().jobIds, second.json().jobIds);
+    assert.equal(first.json().jobIds.length, 3);
+    assert.equal(
+      (
+        await app.inject({
+          ...request,
+          payload: { query, sources: ["untrusted"] },
+        })
+      ).statusCode,
+      400,
+    );
+    const results = await app.inject(
+      `/api/discovery/${first.json().jobIds[0]}/documents`,
+    );
+    assert.deepEqual(results.json().items, []);
+  } finally {
+    await app.close();
+  }
+});
+
+test("topic provider reservation permits only one concurrent request slot", async () => {
+  const { reserveDiscoverySlot } = await import(
+    "../packages/db/src/discovery.js"
+  );
+  const previous = (
+    await db.query(
+      "SELECT discovery_available_at FROM sources WHERE id='github'",
+    )
+  ).rows[0].discovery_available_at;
+  try {
+    await db.query(
+      "UPDATE sources SET discovery_available_at=null WHERE id='github'",
+    );
+    const slots = await Promise.all([
+      reserveDiscoverySlot(db, "github"),
+      reserveDiscoverySlot(db, "github"),
+    ]);
+    assert.equal(slots.filter((x) => x === null).length, 1);
+    assert.equal(slots.filter((x) => x instanceof Date).length, 1);
+  } finally {
+    await db.query(
+      "UPDATE sources SET discovery_available_at=$1 WHERE id='github'",
+      [previous],
+    );
+  }
 });

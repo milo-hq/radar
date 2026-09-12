@@ -41,7 +41,9 @@ npm run dev
 
 每项理由、最大未知和下一步验证动作可同时查看；无创始人资料时个人匹配强制未知。保存模型输入与输出快照，方案、证据、个人资料或机会集合变更后提示旧评估过期。来源面板按去重来源统计，另列原文版本数，明确未配置和未接入渠道。
 
-当前自动发现仍仅限于已有产品的HN讨论，没有新增GitHub/评论站/需求主题发现。扩大机会池需要新增参考产品与需求主题，单纯重复研究旧产品可能生成相近假设。
+「主题发现」支持 GitHub 公开 Issues、Stack Overflow 问题、HN 评论的跨产品关键词检索（过去两年，每渠道每次最多30条）。无需新增密钥，各渠道独立记录成功/空结果/失败，遵守API返回的退避。GitHub结果可人工加入参考产品并关联材料；问答/评论先核对是否已解决，不自动变成机会证据。
+
+接口：[GitHub REST Search](https://docs.github.com/en/rest/search/search)、[Stack Exchange Advanced Search](https://api.stackexchange.com/docs/advanced-search)、[HN Algolia](https://hn.algolia.com/api)。Stack Overflow保留作者、原文和内容许可；只抓问题正文，未抓回答。GitHub只抓Issue正文，未抓评论。三个技术社区存在用户群偏差，未接入Reddit主题搜索、G2或Capterra。
 
 ## 实现与边界
 

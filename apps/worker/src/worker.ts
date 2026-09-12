@@ -1,3 +1,5 @@
+import { reserveDiscoverySlot } from "../../../packages/db/src/discovery.js";
+import { discoverTopic } from "../../../packages/connectors/src/topic.js";
 import { compareOpportunities } from "../../../packages/opportunities/src/comparison.js";
 import { discoverFeedback } from "../../../packages/connectors/src/feedback.js";
 import { researchProduct } from "../../../packages/opportunities/src/research.js";
@@ -37,6 +39,68 @@ while (!stop) {
       continue;
     }
     try {
+      if (job.type === "DISCOVER_TOPIC") {
+        const { source, query } = job.payload;
+        const cooldown = await reserveDiscoverySlot(pool, source);
+        if (cooldown) {
+          await pool.query(
+            "UPDATE jobs SET status='pending',attempts=attempts-1,run_at=$3,locked_until=null,lock_token=null WHERE id=$1 AND lock_token=$2 AND status='running' AND locked_until>now()",
+            [job.id, job.lock_token, cooldown],
+          );
+          continue;
+        }
+        try {
+          const result = await discoverTopic(source, query);
+          await transaction(pool, async (c) => {
+            if (!(await finishJob(c, job))) throw Error("主题采集租约失效");
+            const before = (
+              await c.query(
+                "SELECT count(DISTINCT external_id)::int n FROM raw_documents WHERE source_id=$1",
+                [source],
+              )
+            ).rows[0].n;
+            const rows = await insertDocuments(c, result.documents);
+            for (const row of rows)
+              await c.query(
+                "INSERT INTO discovery_documents VALUES($1,$2) ON CONFLICT DO NOTHING",
+                [job.id, row.id],
+              );
+            const after = (
+              await c.query(
+                "SELECT count(DISTINCT external_id)::int n FROM raw_documents WHERE source_id=$1",
+                [source],
+              )
+            ).rows[0].n;
+            await c.query(
+              "UPDATE jobs SET payload=payload||$2::jsonb WHERE id=$1",
+              [
+                job.id,
+                JSON.stringify({
+                  savedCount: after - before,
+                  matchedCount: rows.length,
+                  quotaRemaining: result.quotaRemaining,
+                }),
+              ],
+            );
+            await c.query(
+              "UPDATE sources SET discovery_available_at=greatest(discovery_available_at,now()+($2 * interval '1 second')) WHERE id=$1",
+              [
+                source,
+                Math.max(result.cooldownSeconds, source === "github" ? 7 : 1),
+              ],
+            );
+          });
+        } catch (e) {
+          const seconds = Number((e as any).cooldownSeconds) || 0;
+          if (seconds > 0)
+            await pool.query(
+              "UPDATE sources SET discovery_available_at=greatest(discovery_available_at,now()+($2 * interval '1 second')) WHERE id=$1",
+              [source, Math.min(seconds, 86400)],
+            );
+          throw e;
+        }
+        continue;
+      }
       if (job.type === "DISCOVER_FEEDBACK") {
         const product = (
           await pool.query("SELECT * FROM winning_products WHERE id=$1", [
