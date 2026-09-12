@@ -71,6 +71,17 @@ export function WorkspaceProducts({
           </div>
         </div>
       )}
+      <div className="ws-readiness">
+        <Search size={19} />
+        <div>
+          <strong>先收集反馈，再研究未被满足的需求</strong>
+          <p>
+            「发现用户反馈」检索 Hacker News
+            最近两年的产品相关讨论，每个产品单次最多收集 40
+            条。讨论会加入研究材料，仍需核对相关性与上下文，不能直接视为已证实的痛点。采集完成后，再点击「研究机会」。发现反馈不需要研究模型。
+          </p>
+        </div>
+      </div>
       {creating && (
         <form
           className="ws-panel ws-form"
@@ -132,6 +143,12 @@ export function WorkspaceProducts({
               j.payload?.productId === p.id &&
               ["pending", "running"].includes(j.status),
           );
+          const discovery = jobs.find(
+            (j) =>
+              j.type === "DISCOVER_FEEDBACK" &&
+              j.payload?.productId === p.id &&
+              ["pending", "running"].includes(j.status),
+          );
           return (
             <article className="ws-panel ws-product" key={p.id}>
               <div className="ws-inline">
@@ -179,6 +196,27 @@ export function WorkspaceProducts({
                 </p>
               )}
               <div className="ws-product-actions">
+                <button
+                  className="button"
+                  disabled={!!busy || !!discovery}
+                  onClick={() =>
+                    void act("discover-" + p.id, async () => {
+                      await api(`/products/${p.id}/discover`, {});
+                      notice(
+                        "用户反馈发现已排队；完成后核对讨论，再发起机会研究",
+                      );
+                    })
+                  }
+                >
+                  <Search size={15} />
+                  {discovery
+                    ? discovery.status === "running"
+                      ? "正在发现反馈…"
+                      : "反馈发现已排队"
+                    : busy === "discover-" + p.id
+                      ? "提交中…"
+                      : "发现用户反馈"}
+                </button>
                 <button
                   className="button primary"
                   disabled={
@@ -362,7 +400,9 @@ export function WorkspaceJobs({
       <div className="ws-section-title">
         <div>
           <h2>研究与采集活动</h2>
-          <p>后台状态每 5 秒更新，研究完成后在机会草稿中查看结果。</p>
+          <p>
+            后台状态每 5 秒更新。反馈发现补充原文材料；机会研究生成待核对草稿。
+          </p>
         </div>
         <span className="ws-tag">实时队列</span>
       </div>
@@ -377,8 +417,10 @@ export function WorkspaceJobs({
             <span className={"ws-job-dot " + j.status} />
             <div>
               <strong>
-                {j.type === "ANALYZE_PRODUCT"
-                  ? "机会研究 · " +
+                {["ANALYZE_PRODUCT", "DISCOVER_FEEDBACK"].includes(j.type)
+                  ? (j.type === "DISCOVER_FEEDBACK"
+                      ? "反馈发现 · "
+                      : "机会研究 · ") +
                     (products.find((p) => p.id === j.payload?.productId)
                       ?.name ||
                       j.payload?.productId ||
@@ -388,6 +430,17 @@ export function WorkspaceJobs({
               <small>
                 {when(j.created_at)} · 尝试 {j.attempts} / {j.max_attempts}
               </small>
+              {j.type === "DISCOVER_FEEDBACK" && j.status === "succeeded" && (
+                <small>
+                  {typeof j.payload?.savedCount === "number"
+                    ? `已保存 ${j.payload.savedCount} 条讨论`
+                    : "反馈发现已完成"}
+                  {typeof j.payload?.queryCount === "number"
+                    ? ` · 已执行 ${j.payload.queryCount} 次检索`
+                    : ""}
+                  {" · 讨论待核对，可在产品研究材料中查看"}
+                </small>
+              )}
               {j.last_error && <p className="ws-warning">{j.last_error}</p>}
             </div>
             <span className="ws-tag">

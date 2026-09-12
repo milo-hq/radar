@@ -521,6 +521,7 @@ function Documents({
           <option value="all">全部来源</option>
           <option value="winner">产品官网</option>
           <option value="reddit">Reddit 讨论</option>
+          <option value="hn">Hacker News</option>
           <option value="manual">手动网页</option>
         </select>
         <span className="ws-muted">{total} 个原文条目</span>

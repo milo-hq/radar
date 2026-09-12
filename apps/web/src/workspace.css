@@ -838,6 +838,7 @@
   line-height: 1.9;
 }
 .ws-product-actions {
+  flex-wrap: wrap;
   margin-top: auto;
   display: flex;
   gap: 10px;

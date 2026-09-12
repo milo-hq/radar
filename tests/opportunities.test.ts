@@ -218,3 +218,46 @@ test("long exact evidence stays storable and two products can share a platform d
     await app.close();
   }
 });
+
+test("feedback discovery queues without a model and reuses an active job", async () => {
+  const app = await buildApp(db);
+  try {
+    const product = (
+      await app.inject({
+        method: "POST",
+        url: "/api/products",
+        payload: {
+          name: "Feedback reference",
+          url: "https://example.com/" + crypto.randomUUID(),
+        },
+      })
+    ).json();
+    const request = {
+      method: "POST" as const,
+      url: `/api/products/${product.id}/discover`,
+      payload: {},
+    };
+    const first = await app.inject(request);
+    const second = await app.inject(request);
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.json().jobId, first.json().jobId);
+    const job = (
+      await db.query("SELECT type,payload FROM jobs WHERE id=$1", [
+        first.json().jobId,
+      ])
+    ).rows[0];
+    assert.equal(job.type, "DISCOVER_FEEDBACK");
+    assert.equal(job.payload.productId, product.id);
+    assert.equal(
+      (
+        await app.inject({
+          ...request,
+          url: `/api/products/${crypto.randomUUID()}/discover`,
+        })
+      ).statusCode,
+      404,
+    );
+  } finally {
+    await app.close();
+  }
+});

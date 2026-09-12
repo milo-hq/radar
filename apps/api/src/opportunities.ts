@@ -263,6 +263,31 @@ export function registerOpportunities(app: FastifyInstance, db: Pool) {
     );
     return { ok: true };
   });
+  app.post("/api/products/:id/discover", async (r) => {
+    const id = idOf(r);
+    return transaction(db, async (c) => {
+      const product = (
+        await c.query("SELECT * FROM winning_products WHERE id=$1 FOR UPDATE", [
+          id,
+        ])
+      ).rows[0];
+      if (!product) error("参考产品不存在", 404);
+      const active = (
+        await c.query(
+          "SELECT id FROM jobs WHERE type='DISCOVER_FEEDBACK' AND payload->>'productId'=$1 AND status IN ('pending','running')",
+          [id],
+        )
+      ).rows[0];
+      if (active) return { jobId: active.id };
+      const job = await enqueue(
+        c,
+        "DISCOVER_FEEDBACK",
+        { productId: id, name: "发现用户反馈" },
+        "feedback:" + id + ":" + crypto.randomUUID(),
+      );
+      return { jobId: job.id };
+    });
+  });
   app.post("/api/products/:id/research", async (r) => {
     const id = idOf(r);
     if (!configured()) error("请先配置研究模型（复用中文翻译 API 配置）", 503);

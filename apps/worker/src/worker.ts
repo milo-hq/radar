@@ -1,3 +1,4 @@
+import { discoverFeedback } from "../../../packages/connectors/src/feedback.js";
 import { researchProduct } from "../../../packages/opportunities/src/research.js";
 import {
   translationConfig,
@@ -35,6 +36,54 @@ while (!stop) {
       continue;
     }
     try {
+      if (job.type === "DISCOVER_FEEDBACK") {
+        const product = (
+          await pool.query("SELECT * FROM winning_products WHERE id=$1", [
+            job.payload.productId,
+          ])
+        ).rows[0];
+        if (!product) throw Error("参考产品不存在");
+        const urls = (
+          await pool.query(
+            "SELECT url FROM product_identifiers WHERE product_id=$1",
+            [product.id],
+          )
+        ).rows.map((row) => row.url);
+        const result = await discoverFeedback({ ...product, urls });
+        await transaction(pool, async (c) => {
+          if (!(await finishJob(c, job))) throw Error("采集任务租约失效");
+          const before = (
+            await c.query(
+              "SELECT count(DISTINCT (d.source_id,d.external_id))::int n FROM product_documents pd JOIN raw_documents d ON d.id=pd.raw_document_id WHERE pd.product_id=$1",
+              [product.id],
+            )
+          ).rows[0].n;
+          const rows = await insertDocuments(c, result.documents);
+          for (const row of rows)
+            await c.query(
+              "INSERT INTO product_documents VALUES($1,$2) ON CONFLICT DO NOTHING",
+              [product.id, row.id],
+            );
+          const after = (
+            await c.query(
+              "SELECT count(DISTINCT (d.source_id,d.external_id))::int n FROM product_documents pd JOIN raw_documents d ON d.id=pd.raw_document_id WHERE pd.product_id=$1",
+              [product.id],
+            )
+          ).rows[0].n;
+          await c.query(
+            "UPDATE jobs SET payload=payload || $2::jsonb WHERE id=$1",
+            [
+              job.id,
+              JSON.stringify({
+                savedCount: after - before,
+                matchedCount: rows.length,
+                queryCount: result.queryCount,
+              }),
+            ],
+          );
+        });
+        continue;
+      }
       if (job.type === "ANALYZE_PRODUCT") {
         const config = translationConfig();
         if (!config) throw new Error("尚未配置研究模型");

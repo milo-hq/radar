@@ -31,12 +31,31 @@ export async function researchProduct(
   const founder = (
     await db.query("SELECT profile FROM founder_profiles WHERE id=1")
   ).rows[0].profile;
-  const docs = (
+  const availableDocs = (
     await db.query(
-      `SELECT * FROM (SELECT DISTINCT ON(d.canonical_url) d.id,d.title,d.body,d.source_id,d.canonical_url,d.collected_at FROM product_documents pd JOIN raw_documents d ON d.id=pd.raw_document_id WHERE pd.product_id=$1 ORDER BY d.canonical_url,d.collected_at DESC) latest ORDER BY collected_at DESC LIMIT 6`,
+      `SELECT * FROM (SELECT latest.*,row_number() OVER(PARTITION BY (source_id='winner') ORDER BY collected_at DESC) AS source_rank FROM (SELECT DISTINCT ON(d.canonical_url) d.id,d.title,d.body,d.source_id,d.published_at,d.metadata,d.author_external_id,d.thread_external_id,d.normalized_content_hash,d.canonical_url,d.collected_at FROM product_documents pd JOIN raw_documents d ON d.id=pd.raw_document_id WHERE pd.product_id=$1 ORDER BY d.canonical_url,d.collected_at DESC) latest) ranked WHERE source_rank <= 100 ORDER BY collected_at DESC`,
       [productId],
     )
   ).rows;
+  const seenContent = new Set<string>(),
+    seenVoices = new Set<string>();
+  const diverse = availableDocs.filter((d) => {
+    const voice = d.author_external_id
+      ? `${d.source_id}:${d.thread_external_id || d.canonical_url}:${d.author_external_id}`
+      : null;
+    if (
+      seenContent.has(d.normalized_content_hash) ||
+      (voice && seenVoices.has(voice))
+    )
+      return false;
+    seenContent.add(d.normalized_content_hash);
+    if (voice) seenVoices.add(voice);
+    return true;
+  });
+  const docs = [
+    ...diverse.filter((d) => d.source_id === "winner").slice(0, 2),
+    ...diverse.filter((d) => d.source_id !== "winner").slice(0, 6),
+  ];
   const lines: { id: number; documentId: string; text: string }[] = [];
   for (const doc of docs)
     for (const line of doc.body.slice(0, 12000).split("\n"))
@@ -63,6 +82,11 @@ export async function researchProduct(
     url: d.canonical_url,
     title: d.title,
     collectedAt: d.collected_at,
+    publishedAt: d.published_at,
+    author: d.author_external_id,
+    thread: d.thread_external_id,
+    contextComplete: d.metadata?.contextComplete ?? null,
+    contextNote: d.metadata?.contextNote ?? null,
     truncated: d.body.length > 12000,
     provenance:
       d.source_id === "winner"
@@ -97,6 +121,7 @@ export async function researchProduct(
     kind: c.kind,
     statement: c.statement,
     quote: lines[c.sourceLine].text,
+    documentId: lines[c.sourceLine].documentId,
   }));
   const ids = claims.map((c) => c.id);
   const proposalSchema = z.object({
@@ -131,6 +156,11 @@ export async function researchProduct(
   );
   for (const proposal of proposalResult.proposals) {
     proposal.dossier.gap = "待验证假设：" + proposal.dossier.gap;
+    proposal.dossier.unmetNeed =
+      "待核对的需求假设：" + proposal.dossier.unmetNeed;
+    proposal.dossier.whyUnsolved =
+      "待验证的原因假设：" + proposal.dossier.whyUnsolved;
+    proposal.dossier.soloWedge = "待验证的方案：" + proposal.dossier.soloWedge;
     if (!evidence.claims.some((c) => c.kind === "pain"))
       proposal.dossier.unknowns =
         "需求尚未验证：当前材料缺少独立用户痛点证据。" +
