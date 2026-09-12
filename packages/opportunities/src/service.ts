@@ -7,6 +7,7 @@ export const dossierSchema = z.object({
   job: text,
   gap: text,
   currentSolution: text,
+  comparisonBlocker: text,
   unmetNeed: text,
   whyUnsolved: text,
   soloWedge: text,

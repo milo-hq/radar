@@ -1,3 +1,7 @@
+import {
+  WorkspaceComparison,
+  SourceCoverage,
+} from "./components/workspace-comparison";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -31,6 +35,7 @@ import {
 import "./workspace.css";
 const navigation = [
   { id: "opportunities", title: "机会工作台", icon: Compass },
+  { id: "comparison", title: "机会比较", icon: Compass },
   { id: "products", title: "参考产品", icon: BookOpen },
   { id: "documents", title: "原文库", icon: FileText },
   { id: "settings", title: "创始人设置", icon: Settings2 },
@@ -204,11 +209,13 @@ export default function App() {
                   <p>
                     {page === "opportunities"
                       ? "从真实产品出发，找到具体切口；用证据决定下一步。"
-                      : page === "products"
-                        ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
-                        : page === "documents"
-                          ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
-                          : "让每次机会研究考虑你的时间、能力和可承受投入。"}
+                      : page === "comparison"
+                        ? "比较价值、可行性和个人匹配，决定下一步先验证什么。"
+                        : page === "products"
+                          ? "参考产品是研究起点。用户、任务和未被满足的需求，决定机会。"
+                          : page === "documents"
+                            ? "保留来源、完整上下文与中文阅读，所有声明都能追溯。"
+                            : "让每次机会研究考虑你的时间、能力和可承受投入。"}
                   </p>
                 </div>
                 {page !== "settings" && (
@@ -399,8 +406,19 @@ export default function App() {
                   />
                 </>
               )}
+              {page === "comparison" && (
+                <WorkspaceComparison
+                  revision={revision}
+                  jobs={jobs}
+                  opportunities={opportunities}
+                  summary={summary}
+                  notice={notice}
+                  openOpportunity={openOpportunity}
+                />
+              )}
               {page === "products" && (
                 <>
+                  <SourceCoverage summary={summary} />
                   <WorkspaceProducts
                     products={products}
                     jobs={jobs}

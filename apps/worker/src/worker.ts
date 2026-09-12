@@ -1,3 +1,4 @@
+import { compareOpportunities } from "../../../packages/opportunities/src/comparison.js";
 import { discoverFeedback } from "../../../packages/connectors/src/feedback.js";
 import { researchProduct } from "../../../packages/opportunities/src/research.js";
 import {
@@ -82,6 +83,17 @@ while (!stop) {
             ],
           );
         });
+        continue;
+      }
+      if (job.type === "COMPARE_OPPORTUNITIES") {
+        const config = translationConfig();
+        if (!config) throw Error("尚未配置研究模型");
+        await compareOpportunities(
+          pool,
+          job,
+          new CompatibleProvider(config),
+          config.model,
+        );
         continue;
       }
       if (job.type === "ANALYZE_PRODUCT") {

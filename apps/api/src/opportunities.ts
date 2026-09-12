@@ -1,3 +1,5 @@
+import { comparisonInput } from "../../../packages/opportunities/src/comparison.js";
+import { hash } from "../../../packages/core/src/documents.js";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -22,11 +24,53 @@ function configured() {
   }
 }
 export function registerOpportunities(app: FastifyInstance, db: Pool) {
+  app.get("/api/comparison", async () => {
+    const latest = (
+      await db.query(
+        "SELECT id,input_hash,result,created_at FROM opportunity_comparisons ORDER BY created_at DESC LIMIT 1",
+      )
+    ).rows[0];
+    if (!latest) return { latest: null };
+    const input = await comparisonInput(db);
+    return {
+      latest: {
+        ...latest,
+        stale: latest.input_hash !== hash(JSON.stringify(input)),
+      },
+    };
+  });
+  app.post("/api/comparison", async () => {
+    if (!configured()) error("尚未配置研究模型");
+    const input = await comparisonInput(db, true);
+    if (!input.items.length) error("暂无可比较机会");
+    return transaction(db, async (c) => {
+      await c.query("SELECT pg_advisory_xact_lock(723109)");
+      const active = (
+        await c.query(
+          "SELECT id FROM jobs WHERE type='COMPARE_OPPORTUNITIES' AND status IN ('pending','running') LIMIT 1",
+        )
+      ).rows[0];
+      if (active) return { jobId: active.id };
+      const job = await enqueue(
+        c,
+        "COMPARE_OPPORTUNITIES",
+        { name: "机会价值与可行性比较" },
+        "comparison:" + crypto.randomUUID(),
+      );
+      await c.query("UPDATE jobs SET max_attempts=2 WHERE id=$1", [job.id]);
+      return { jobId: job.id };
+    });
+  });
   app.get("/api/workspace", async () => {
     const rows = (await db.query("SELECT id,status FROM opportunities")).rows;
     const values = await Promise.all(rows.map((r) => getOpportunity(db, r.id)));
     return {
       opportunities: rows.length,
+      sourceCoverage: (
+        await db.query(
+          "SELECT s.id,s.name,count(DISTINCT(d.source_id,d.external_id)) FILTER(WHERE d.id IS NOT NULL)::int documents,count(d.id)::int snapshots FROM sources s LEFT JOIN raw_documents d ON d.source_id=s.id GROUP BY s.id,s.name ORDER BY s.id",
+        )
+      ).rows,
       products: (await db.query("SELECT count(*)::int n FROM winning_products"))
         .rows[0].n,
       claims: (await db.query("SELECT count(*)::int n FROM evidence_claims"))

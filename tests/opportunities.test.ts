@@ -261,3 +261,130 @@ test("feedback discovery queues without a model and reuses an active job", async
     await app.close();
   }
 });
+
+test("comparison persists a complete snapshot, forces unknown founder fit, and detects changed input", async () => {
+  const { compareOpportunities } = await import(
+    "../packages/opportunities/src/comparison.js"
+  );
+  const old = (await db.query("SELECT id,status FROM opportunities")).rows;
+  const founder = (
+    await db.query("SELECT profile FROM founder_profiles WHERE id=1")
+  ).rows[0].profile;
+  let productId: string | undefined, jobId: string | undefined;
+  const app = await buildApp(db);
+  try {
+    await db.query("UPDATE opportunities SET status='KILL'");
+    await db.query("UPDATE founder_profiles SET profile='{}' WHERE id=1");
+    productId = (
+      await db.query(
+        "INSERT INTO winning_products(name,domain) VALUES('comparison fixture','example.com') RETURNING id",
+      )
+    ).rows[0].id;
+    const id = (
+      await db.query(
+        "INSERT INTO opportunities(product_id,title,dossier) VALUES($1,'Comparison fixture','{\"comparisonBlocker\":\"Existing product already supplies this workflow\"}') RETURNING id",
+        [productId],
+      )
+    ).rows[0].id;
+    const token = crypto.randomUUID();
+    jobId = (
+      await db.query(
+        "INSERT INTO jobs(type,payload,idempotency_key,status,lock_token,locked_until) VALUES('COMPARE_OPPORTUNITIES','{}',$1,'running',$2,now()+interval '180 seconds') RETURNING id",
+        [crypto.randomUUID(), token],
+      )
+    ).rows[0].id;
+    const dimension = { score: 4, reason: "待验证假设" };
+    const provider = {
+      async generateStructured<T>() {
+        return {
+          value: {
+            items: [
+              {
+                id,
+                demand: dimension,
+                value: dimension,
+                feasibility: dimension,
+                acquisition: dimension,
+                fit: dimension,
+                nextStep: "访谈目标客户",
+                biggestUnknown: "尚无实际付费证据",
+                differentiation: "unknown",
+                differentiationReason: "缺少能力覆盖材料",
+              },
+            ],
+          } as T,
+          inputTokens: 1,
+          outputTokens: 1,
+          estimatedCost: null,
+        };
+      },
+      async generateText() {
+        throw Error("unused");
+      },
+    };
+    await assert.rejects(
+      compareOpportunities(
+        db,
+        { id: jobId!, lock_token: crypto.randomUUID() },
+        provider,
+        "fixture",
+      ),
+      /租约/,
+    );
+    await compareOpportunities(
+      db,
+      { id: jobId!, lock_token: token },
+      provider,
+      "fixture",
+    );
+    const before = (await app.inject("/api/comparison")).json().latest;
+    assert.equal(before.stale, false);
+    assert.equal(before.result.items[0].fit.score, null);
+    assert.equal(before.result.items[0].coverage, 85);
+    assert.equal(before.result.items[0].demand.score, 2);
+    assert.equal(before.result.items[0].score, null);
+    assert.match(before.result.items[0].priorityBlocker, /already supplies/);
+    assert.equal(
+      (await db.query("SELECT status FROM jobs WHERE id=$1", [jobId])).rows[0]
+        .status,
+      "succeeded",
+    );
+    await db.query(
+      "UPDATE opportunities SET title='Changed hypothesis' WHERE id=$1",
+      [id],
+    );
+    assert.equal(
+      (await app.inject("/api/comparison")).json().latest.stale,
+      true,
+    );
+    await db.query(
+      "INSERT INTO opportunities(product_id,title,dossier) SELECT $1,'Extra ' || n,'{}' FROM generate_series(1,30) n",
+      [productId],
+    );
+    const overLimit = await app.inject("/api/comparison");
+    assert.equal(overLimit.statusCode, 200);
+    assert.equal(overLimit.json().latest.stale, true);
+  } finally {
+    if (jobId) {
+      await db.query("DELETE FROM opportunity_comparisons WHERE job_id=$1", [
+        jobId,
+      ]);
+      await db.query("DELETE FROM jobs WHERE id=$1", [jobId]);
+    }
+    if (productId) {
+      await db.query("DELETE FROM opportunities WHERE product_id=$1", [
+        productId,
+      ]);
+      await db.query("DELETE FROM winning_products WHERE id=$1", [productId]);
+    }
+    for (const row of old)
+      await db.query("UPDATE opportunities SET status=$2 WHERE id=$1", [
+        row.id,
+        row.status,
+      ]);
+    await db.query("UPDATE founder_profiles SET profile=$1 WHERE id=1", [
+      JSON.stringify(founder),
+    ]);
+    await app.close();
+  }
+});
