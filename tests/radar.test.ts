@@ -754,3 +754,46 @@ test("Python stage is lease fenced and engine failures cannot publish analytics"
   );
   assert.equal((await state(id)).analytics, null);
 });
+
+test("online Reddit browser joins each scan and offline browsers are explicitly skipped", async () => {
+  await db.query(
+    "UPDATE reddit_browser_connection SET enabled=true,last_seen_at=now(),pause_reason=null WHERE id",
+  );
+  try {
+    const id = await scan("planning");
+    await runRadarJob(
+      db,
+      await claimed(await job(id, "RADAR_PLAN")),
+      provider(() => plan),
+      model,
+      { sites: async () => [] },
+    );
+    const collectors = await jobs(id, "DISCOVER_TOPIC");
+    assert.equal(
+      collectors.filter((j) => j.payload.transport === "reddit_browser").length,
+      4,
+    );
+    await db.query(
+      "UPDATE reddit_browser_connection SET enabled=false WHERE id",
+    );
+    const offline = await scan("planning");
+    await runRadarJob(
+      db,
+      await claimed(await job(offline, "RADAR_PLAN")),
+      provider(() => plan),
+      model,
+      { sites: async () => [] },
+    );
+    assert.equal(
+      (await jobs(offline, "DISCOVER_TOPIC")).filter(
+        (j) => j.payload.source === "reddit",
+      ).length,
+      0,
+    );
+    assert.match((await state(offline)).plan.redditBrowser.reason, /未连接/);
+  } finally {
+    await db.query(
+      "UPDATE reddit_browser_connection SET enabled=false WHERE id",
+    );
+  }
+});

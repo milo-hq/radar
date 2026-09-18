@@ -24,10 +24,10 @@ export async function enqueue(
 export async function claimJob(db: Pool, id?: string): Promise<Job | null> {
   return transaction(db, async (c) => {
     await c.query(
-      "UPDATE jobs SET status='failed',last_error='Worker lease expired at retry limit',updated_at=now() WHERE status='running' AND locked_until<now() AND attempts>=max_attempts",
+      "UPDATE jobs SET status='failed',last_error='Worker lease expired at retry limit',updated_at=now() WHERE payload->>'transport' IS DISTINCT FROM 'reddit_browser' AND status='running' AND locked_until<now() AND attempts>=max_attempts",
     );
     const result = await c.query(
-      `UPDATE jobs SET status='running',attempts=attempts+1,lock_token=gen_random_uuid(),locked_until=now()+interval '120 seconds',updated_at=now() WHERE id=(SELECT id FROM jobs WHERE ($1::uuid IS NULL OR id=$1) AND attempts<max_attempts AND ((status='pending' AND run_at<=now()) OR (status='running' AND locked_until<now())) ORDER BY run_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
+      `UPDATE jobs SET status='running',attempts=attempts+1,lock_token=gen_random_uuid(),locked_until=now()+interval '120 seconds',updated_at=now() WHERE id=(SELECT id FROM jobs WHERE payload->>'transport' IS DISTINCT FROM 'reddit_browser' AND ($1::uuid IS NULL OR id=$1) AND attempts<max_attempts AND ((status='pending' AND run_at<=now()) OR (status='running' AND locked_until<now())) ORDER BY run_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
       [id ?? null],
     );
     return result.rows[0] ?? null;

@@ -1,3 +1,4 @@
+import { registerRedditBrowser } from "./reddit-browser.js";
 import { registerRadar } from "./radar.js";
 import { registerDiscovery } from "./discovery.js";
 import { registerOpportunities } from "./opportunities.js";
@@ -50,7 +51,17 @@ export async function buildApp(db: Pool) {
         `http://127.0.0.1:${process.env.PORT ?? 4317}`,
         `http://localhost:${process.env.PORT ?? 4317}`,
       ];
-      if (!allowed.includes(origin))
+      const browserRoute =
+        /^\/api\/reddit-browser\/(heartbeat|claim|snapshot|complete|pause)$/.test(
+          req.url,
+        );
+      if (
+        !allowed.includes(origin) &&
+        !(
+          browserRoute &&
+          /^chrome-extension:\/\/[a-p]{32}$/.test(req.headers.origin)
+        )
+      )
         return reply
           .code(403)
           .send({ error: "Cross-origin writes are not allowed" });
@@ -222,6 +233,18 @@ export async function buildApp(db: Pool) {
   }));
   app.post("/api/jobs/:id/retry", async (req, reply) => {
     const id = uuid.parse((req.params as any).id);
+    const browserJob = (
+      await db.query(
+        "SELECT 1 FROM jobs WHERE id=$1 AND payload->>'transport'='reddit_browser'",
+        [id],
+      )
+    ).rowCount;
+    if (browserJob)
+      return reply
+        .code(409)
+        .send({
+          error: "浏览器任务请在设置中重新采集 Reddit；历史轮次保持原结果。",
+        });
     const result = await db.query(
       "UPDATE jobs SET status='pending',attempts=0,run_at=now(),lock_token=null,locked_until=null,updated_at=now() WHERE id=$1 AND status='failed' RETURNING id",
       [id],
@@ -282,5 +305,6 @@ export async function buildApp(db: Pool) {
   registerOpportunities(app, db);
   registerDiscovery(app, db);
   registerRadar(app, db);
+  registerRedditBrowser(app, db);
   return app;
 }

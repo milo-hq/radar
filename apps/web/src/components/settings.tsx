@@ -1,3 +1,4 @@
+import { RedditBrowserSettings } from "./reddit-browser-settings";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Database, Layers3, Pause, Play, Radio, Telescope } from "lucide-react";
@@ -88,6 +89,7 @@ export function Settings({
         </Button>
       </form>
       <div>
+        <RedditBrowserSettings revision={revision} notice={notice} />
         <section className="panel connection-panel">
           <h2>连接状态</h2>
           <div className="connection-row">

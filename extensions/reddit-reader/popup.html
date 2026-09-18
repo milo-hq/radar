@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><title>Reddit Reader</title
+  ><style>
+    body {
+      font: 14px system-ui;
+      width: 320px;
+      padding: 16px;
+      color: #172033;
+    }
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 9px;
+      margin: 8px 0;
+    }
+    button {
+      padding: 8px 12px;
+      margin: 6px 4px 6px 0;
+    }
+    p {
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+    small {
+      color: #64748b;
+    }
+  </style>
+  <h2>Reddit 浏览器采集</h2>
+  <p>
+    使用当前 Chrome 登录状态读取公开社区。仅向本机 Radar 发送帖子与评论，不读取
+    Cookie 或私信。
+  </p>
+  <label
+    >本地连接码<input id="token" type="password" autocomplete="off" /></label
+  ><button id="start">连接 / 继续</button
+  ><button id="stop">停止</button>
+  <p id="status" role="status"></p>
+  <small
+    >在 Radar 设置页生成连接码。保持 Chrome
+    开启；遇到验证时，请在采集标签页完成后继续。</small
+  >
+  <script type="module" src="popup.js"></script>
+</html>

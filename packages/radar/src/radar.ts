@@ -1,4 +1,8 @@
 import {
+  enqueueBrowserJobs,
+  expireBrowserJobs,
+} from "../../db/src/reddit-browser.js";
+import {
   analyzeDocuments,
   extractionBatches,
   crawlerSites,
@@ -129,6 +133,7 @@ async function emptyReport(c: PoolClient, id: string, coverage: any) {
   );
 }
 export async function advanceScans(db: Pool) {
+  await expireBrowserJobs(db);
   await transaction(db, async (c) => {
     const scans = (
       await c.query(
@@ -315,6 +320,18 @@ export async function runRadarJob(
       (site) => site.enabled,
     );
     await save(db, job, async (c) => {
+      const connected = !!(
+        await c.query(
+          "SELECT id FROM reddit_browser_connection WHERE id AND enabled AND pause_reason IS NULL AND last_seen_at>now()-interval '90 seconds'",
+        )
+      ).rowCount;
+      if (connected) await enqueueBrowserJobs(c, job.payload.scanId);
+      const redditBrowser = {
+        included: connected,
+        reason: connected
+          ? "通过已登录浏览器采集公开社区"
+          : "浏览器未连接或已暂停，本轮未采集 Reddit",
+      };
       for (const site of websites) {
         const child = await enqueue(
           c,
@@ -355,7 +372,10 @@ export async function runRadarJob(
         }
       await c.query(
         "UPDATE radar_scans SET status='collecting',plan=$2,updated_at=now() WHERE id=$1",
-        [job.payload.scanId, JSON.stringify({ ...value, websites })],
+        [
+          job.payload.scanId,
+          JSON.stringify({ ...value, websites, redditBrowser }),
+        ],
       );
     });
     return;
