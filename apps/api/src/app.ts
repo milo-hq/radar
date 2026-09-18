@@ -130,6 +130,8 @@ export async function buildApp(db: Pool) {
             "stackoverflow",
             "appstore",
             "wordpress",
+            "youtube",
+            "v2ex",
             "web",
           ])
           .default("all"),

@@ -63,7 +63,7 @@ export const fields = [
 ] as const;
 export const localizationFields = [
   ["sourceMarket", "来源地区 A", "已有案例在哪个国家或地区？"],
-  ["targetMarket", "目标地区 B", "计划落地的地区；亚洲方向不含中国"],
+  ["targetMarket", "目标地区 B", "计划落地的具体国家或地区；不限全球任何市场"],
   [
     "entryMarket",
     "首发国家与选择理由",

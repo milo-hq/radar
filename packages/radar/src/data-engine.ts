@@ -116,7 +116,9 @@ export async function collectReviews(
   source: "appstore" | "wordpress",
   query: string,
   transport?: typeof fetch,
+  country = "us",
 ) {
+  if (!/^[a-z]{2}$/.test(country)) throw Error("Invalid storefront country");
   const result = z
     .object({
       documents: z.array(rawDocumentSchema).max(40),
@@ -125,9 +127,7 @@ export async function collectReviews(
       errors: z.array(z.string()),
       applications: z.number().int().nonnegative(),
     })
-    .parse(
-      await request("/collect", { source, query, country: "us" }, transport),
-    );
+    .parse(await request("/collect", { source, query, country }, transport));
   if (result.documents.some((d) => d.sourceKey !== source))
     throw Error("Python 采集返回了不匹配的来源");
   return result;

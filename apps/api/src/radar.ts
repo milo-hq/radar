@@ -1,3 +1,7 @@
+import {
+  optionalSources,
+  globalPolicy,
+} from "../../../packages/core/src/discovery-policy.js";
 import { scanKindSql } from "../../../packages/db/src/scan-kind.js";
 import { z } from "zod";
 import { crawlerSites } from "../../../packages/radar/src/data-engine.js";
@@ -67,7 +71,14 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
         )
       ).rows[0] ?? null;
     await attachLiveCollection(latest);
-    return { configured: configured(), latest, previous, active };
+    return {
+      configured: configured(),
+      latest,
+      previous,
+      active,
+      discoveryPolicy: globalPolicy(0),
+      sourceReadiness: optionalSources(process.env),
+    };
   });
   app.get("/api/radar/history", async (request, reply) => {
     const parsed = z

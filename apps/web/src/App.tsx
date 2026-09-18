@@ -624,6 +624,9 @@ function Documents({
           <option value="all">全部来源</option>
           <option value="winner">产品官网</option>
           <option value="reddit">Reddit 讨论</option>
+          <option value="x">X 公开帖子</option>
+          <option value="youtube">YouTube 评论</option>
+          <option value="v2ex">V2EX 主题与回复</option>
           <option value="github">GitHub Issues</option>
           <option value="stackoverflow">Stack Overflow</option>
           <option value="appstore">App Store 用户评论</option>

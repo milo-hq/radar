@@ -1,3 +1,4 @@
+import { collectGlobalSocial } from "../../../packages/connectors/src/global-social.js";
 import {
   collectReviews,
   crawlSite,
@@ -75,8 +76,20 @@ while (!stop) {
             source === "web"
               ? await crawlSite(job.payload.siteId, job.id)
               : ["appstore", "wordpress"].includes(source)
-                ? await collectReviews(source, query)
-                : await discoverTopic(source, query);
+                ? await collectReviews(
+                    source,
+                    query,
+                    undefined,
+                    job.payload.country ?? "us",
+                  )
+                : ["youtube", "v2ex"].includes(source)
+                  ? await collectGlobalSocial(source, query, {
+                      apiKey: process.env.YOUTUBE_API_KEY,
+                      token: process.env.V2EX_ACCESS_TOKEN,
+                      language: job.payload.searchLanguage,
+                      node: "apps",
+                    })
+                  : await discoverTopic(source, query);
           await transaction(pool, async (c) => {
             if (!(await finishJob(c, job))) throw Error("主题采集租约失效");
             const before = (

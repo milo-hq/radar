@@ -20,6 +20,8 @@ const sources: Record<string, string> = {
   appstore: "App Store 用户评论",
   x: "X (Twitter)",
   wordpress: "WordPress 插件评价",
+  youtube: "YouTube 评论",
+  v2ex: "V2EX 主题与回复",
   web: "公开网站",
   winner: "WINNER",
 };

@@ -162,7 +162,7 @@ const recommendation = (findingIds: string[]) => ({
   findingIds,
 });
 
-test("concurrent scan starts share one plan; planning creates 20 searches and one job per enabled website", async () => {
+test("concurrent scan starts share one plan; planning preserves 20 searches and adds 4 regional searches and one job per enabled website", async () => {
   const ids = await Promise.all(Array.from({ length: 8 }, () => startScan(db)));
   assert.equal(new Set(ids).size, 1);
   const id = ids[0];
@@ -188,10 +188,10 @@ test("concurrent scan starts share one plan; planning creates 20 searches and on
   );
   assert.equal((await state(id)).status, "collecting");
   const children = await jobs(id, "DISCOVER_TOPIC");
-  assert.equal(children.length, 21);
+  assert.equal(children.length, 25);
   assert.equal(
     new Set(children.map((j) => `${j.payload.source}:${j.payload.query}`)).size,
-    21,
+    25,
   );
   for (const source of [
     "hn",
@@ -200,7 +200,10 @@ test("concurrent scan starts share one plan; planning creates 20 searches and on
     "appstore",
     "wordpress",
   ])
-    assert.equal(children.filter((j) => j.payload.source === source).length, 4);
+    assert.equal(
+      children.filter((j) => j.payload.source === source).length,
+      source === "appstore" ? 8 : 4,
+    );
   assert.ok(
     children.every(
       (j) => j.max_attempts === (j.payload.source === "web" ? 2 : 1),
@@ -536,7 +539,16 @@ test("audit receives original evidence and publishes only the reviewed report", 
         return draft;
       }
       assert.equal(request.promptName, "radar-audit");
-      assert.deepEqual(input.draft, draft);
+      assert.deepEqual(input.draft, {
+        ...draft,
+        recommendations: draft.recommendations.map(
+          (r: Record<string, unknown>) => ({
+            ...r,
+            opportunityType: "tool_gap",
+            targetMarket: "待验证；不以原文语言推断市场",
+          }),
+        ),
+      });
       assert.equal(
         input.findings[0].evidence.quote.trim(),
         "Exact unresolved request 0.",
@@ -822,10 +834,22 @@ test("online Reddit browser joins each scan and offline browsers are explicitly 
       (await jobs(withX, "DISCOVER_TOPIC")).filter(
         (j) => j.payload.source === "x",
       ).length,
-      4,
+      8,
     );
     assert.equal((await state(withX)).plan.xBrowser.included, true);
     const storedPlan = (await state(withX)).plan;
+    assert.equal(storedPlan.policy.version, "global-v1");
+    const xJobs = (await jobs(withX, "DISCOVER_TOPIC")).filter(
+      (j) => j.payload.source === "x",
+    );
+    assert.equal(
+      xJobs.filter((j) => j.payload.searchLanguage === "en").length,
+      4,
+    );
+    assert.equal(
+      xJobs.filter((j) => j.payload.searchLanguage !== "en").length,
+      4,
+    );
     const products = storedPlan.toolTargets
       .map((t: { product: string }) => t.product)
       .sort();
@@ -836,7 +860,7 @@ test("online Reddit browser joins each scan and offline browsers are explicitly 
     for (const source of ["reddit", "x"]) {
       const sourceJobs = browserJobs.filter((j) => j.payload.source === source);
       assert.deepEqual(
-        sourceJobs.map((j) => j.payload.referenceTool).sort(),
+        [...new Set(sourceJobs.map((j) => j.payload.referenceTool))].sort(),
         products,
       );
       for (const j of sourceJobs)
@@ -1043,4 +1067,41 @@ test("missing context decisions cannot silently turn into zero findings", async 
     ).rowCount,
     0,
   );
+});
+
+test("optional global sources schedule only when configured and cover all planned languages", async () => {
+  const before = {
+    yt: process.env.YOUTUBE_API_KEY,
+    v: process.env.V2EX_ACCESS_TOKEN,
+  };
+  process.env.YOUTUBE_API_KEY = "fixture-not-a-real-key";
+  process.env.V2EX_ACCESS_TOKEN = "fixture-not-a-real-token";
+  try {
+    const id = await scan("planning");
+    await runRadarJob(
+      db,
+      await claimed(await job(id, "RADAR_PLAN")),
+      provider(() => plan),
+      model,
+      { sites: async () => [] },
+    );
+    const children = await jobs(id, "DISCOVER_TOPIC");
+    const policy = (await state(id)).plan.policy;
+    const yt = children.filter((j) => j.payload.source === "youtube");
+    assert.equal(yt.length, 4);
+    assert.deepEqual(
+      [...new Set(yt.map((j) => j.payload.searchLanguage))].sort(),
+      [...policy.searchLanguages].sort(),
+    );
+    assert.equal(children.filter((j) => j.payload.source === "v2ex").length, 4);
+    assert.ok(yt.every((j) => j.max_attempts === 2));
+    assert.ok(
+      !JSON.stringify((await state(id)).plan).includes("fixture-not-a-real"),
+    );
+  } finally {
+    if (before.yt === undefined) delete process.env.YOUTUBE_API_KEY;
+    else process.env.YOUTUBE_API_KEY = before.yt;
+    if (before.v === undefined) delete process.env.V2EX_ACCESS_TOKEN;
+    else process.env.V2EX_ACCESS_TOKEN = before.v;
+  }
 });

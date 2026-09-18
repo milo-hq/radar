@@ -20,7 +20,12 @@ import {
 } from "lucide-react";
 import { api, when } from "./api";
 
+type DiscoveryPolicy = { searchLanguages: string[]; storefronts: string[] };
 type Recommendation = {
+  opportunityType?: string;
+  targetMarket?: string;
+  originalLanguages?: string[];
+  observedMarkets?: { name: string; quote: string; documentId: string }[];
   id: string;
   title: string;
   buyer: string;
@@ -89,6 +94,7 @@ type Scan = {
   analytics?: RadarAnalytics | null;
   liveCollection?: { total: number; sourceCounts: Record<string, number> };
   plan: {
+    policy?: DiscoveryPolicy;
     queries: { query: string; reason: string }[];
     toolTargets?: { product: string; focus: string }[];
   } | null;
@@ -115,6 +121,13 @@ type Scan = {
   }[];
 };
 type RadarState = {
+  discoveryPolicy?: DiscoveryPolicy;
+  sourceReadiness?: {
+    id: string;
+    name: string;
+    ready: boolean;
+    reason: string;
+  }[];
   configured: boolean;
   latest: Scan | null;
   previous?: Scan | null;
@@ -275,7 +288,7 @@ export function WorkspaceRadar({
     <div className="ws-radar">
       <section className="admin-page-toolbar">
         <div>
-          <h1>自动发现</h1>
+          <h1>全球工具机会发现</h1>
           <p>汇总多渠道需求，分析并比较适合独立开发者的产品机会。</p>
         </div>
         <Button
@@ -361,6 +374,41 @@ export function WorkspaceRadar({
           </div>
         </section>
       )}
+      <section className="ws-panel ws-radar-plan">
+        <h2>全球采样与来源接入</h2>
+        <p className="ws-muted">
+          面向全球用户，报告统一中文。保留英文搜索，轮换补充其他语言与应用商店地区；每轮只覆盖部分样本，语言和商店地区不代表用户所在市场。多语言文本搜索依赖
+          X 浏览器连接或 YouTube 密钥，未连接时不会执行这些查询。
+        </p>
+        {scan?.plan?.policy ? (
+          <p>
+            本轮计划查询语言：{scan.plan.policy.searchLanguages.join(" / ")} ·
+            商店采样：{scan.plan.policy.storefronts.join(" / ")}
+          </p>
+        ) : (
+          <p>此轮未记录全球采样策略；新轮次将使用新策略。</p>
+        )}
+        <Table aria-label="新增来源接入状态">
+          <TableHeader>
+            <TableRow>
+              <TableHead>来源</TableHead>
+              <TableHead>接入状态</TableHead>
+              <TableHead>说明</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data?.sourceReadiness?.map((source) => (
+              <TableRow key={source.id}>
+                <TableCell>{source.name}</TableCell>
+                <TableCell>
+                  {source.ready ? "已配置，待采集验证" : "未启用"}
+                </TableCell>
+                <TableCell>{source.reason}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
       {crawler && (
         <details className="ws-panel ws-radar-plan">
           <summary>
@@ -549,7 +597,8 @@ export function WorkspaceRadar({
                 WordPress
                 插件评论，以及用户社区、产品目录和官网网页爬取。已连接浏览器时还会加入
                 Reddit 公开讨论；启用 X 权限后也会搜索 X
-                公开帖子。各渠道可能没有返回材料，实际采集量以下方数字为准。
+                公开帖子。配置密钥后还会采集 YouTube 评论和 V2EX apps
+                节点主题回复。各渠道可能没有返回材料，实际采集量以下方数字为准。
                 模型提取每篇前 4000
                 字符，可能缺少完整后续讨论；搜索命中不等于需求成立。
               </p>
@@ -964,6 +1013,18 @@ function RecommendationCard({
       </div>
       <dl className="ws-radar-facts">
         {[
+          [
+            "机会类型",
+            (
+              {
+                tool_gap: "现有工具未解决的痛点",
+                simpler_alternative: "更简单的替代工具",
+                localization: "本地化机会",
+              } as Record<string, string>
+            )[item.opportunityType ?? ""] ?? "历史记录未分类",
+          ],
+          ["目标市场（待验证假设）", item.targetMarket],
+          ["原文语言", item.originalLanguages?.join(" / ")],
           ["谁可能付费", item.buyer],
           ["他们遇到什么问题", item.problem],
           ["可以做什么", item.solution],
@@ -977,6 +1038,26 @@ function RecommendationCard({
           </div>
         ))}
       </dl>
+      <div className="ws-radar-priority">
+        <strong>用户明确提到的市场</strong>
+        {item.observedMarkets?.length ? (
+          item.observedMarkets.map((market, i) => (
+            <blockquote key={i}>
+              <p>
+                {market.name}：{market.quote}
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => openDocument(market.documentId)}
+              >
+                查看原文
+              </Button>
+            </blockquote>
+          ))
+        ) : (
+          <p>未知；不根据语言推断地理位置。</p>
+        )}
+      </div>
       <div className="ws-radar-next">
         <ArrowRight size={19} />
         <div>

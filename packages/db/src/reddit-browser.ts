@@ -1,3 +1,7 @@
+import {
+  globalPolicy,
+  localizedToolQuery,
+} from "../../core/src/discovery-policy.js";
 import { ensureToolTargets, productQuery } from "./tool-search.js";
 import type { PoolClient, Pool } from "pg";
 import { enqueue } from "./jobs.js";
@@ -41,25 +45,40 @@ export async function expireBrowserJobs(db: Pool | PoolClient) {
 
 export async function enqueueXBrowserJobs(c: PoolClient, scanId: string) {
   const ids: string[] = [];
-  for (const target of await ensureToolTargets(c, scanId)) {
-    const query = productQuery(target, "x");
-    const job = await enqueue(
-      c,
-      "DISCOVER_TOPIC",
-      {
-        source: "x",
-        referenceTool: target.product,
-        transport: "reddit_browser",
-        searchQuery: query,
-        query,
-        name: `X 工具痛点 · ${query}`,
-        scanId,
-        deadlineAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-      },
-      `x-browser:${scanId}:${query}`,
-    );
-    await c.query("UPDATE jobs SET max_attempts=5 WHERE id=$1", [job.id]);
-    ids.push(job.id);
+  const targets = await ensureToolTargets(c, scanId);
+  const plan = (
+    await c.query("SELECT plan FROM radar_scans WHERE id=$1", [scanId])
+  ).rows[0].plan;
+  const policy = plan.policy ?? globalPolicy(0);
+  for (const [index, target] of targets.entries()) {
+    for (const searchLanguage of [
+      "en",
+      policy.searchLanguages[1 + (index % 2)],
+    ]) {
+      const query =
+        searchLanguage === "en"
+          ? productQuery(target, "x")
+          : localizedToolQuery(target.product, searchLanguage) +
+            " -filter:retweets";
+      const job = await enqueue(
+        c,
+        "DISCOVER_TOPIC",
+        {
+          source: "x",
+          referenceTool: target.product,
+          searchLanguage,
+          transport: "reddit_browser",
+          searchQuery: query,
+          query,
+          name: `X 工具痛点 · ${query}`,
+          scanId,
+          deadlineAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        },
+        `x-browser:${scanId}:${query}`,
+      );
+      await c.query("UPDATE jobs SET max_attempts=5 WHERE id=$1", [job.id]);
+      ids.push(job.id);
+    }
   }
   return ids;
 }

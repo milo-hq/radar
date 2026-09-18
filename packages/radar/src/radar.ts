@@ -1,3 +1,9 @@
+import {
+  globalPolicy,
+  optionalSources,
+  groundMarket,
+  localizedToolQuery,
+} from "../../core/src/discovery-policy.js";
 import { contextReviewSchema, contextBlocker } from "./evidence-context.js";
 import { ensureToolTargets, productQuery } from "../../db/src/tool-search.js";
 import {
@@ -18,7 +24,6 @@ import { enqueue, finishJob, type Job } from "../../db/src/jobs.js";
 import { runStructured } from "../../llm/src/run.js";
 import type { LLMProvider } from "../../llm/src/provider.js";
 
-const preferences = ["美国→中东", "美国→欧洲", "美国→亚洲（不含中国）"];
 const text = z.string().min(1).max(3000);
 export const planSchema = z
   .object({
@@ -273,13 +278,14 @@ export async function runRadarJob(
       provider,
       {
         promptName,
-        promptVersion: [
-          "radar-extract",
-          "radar-audit",
-          "radar-report",
-        ].includes(promptName)
-          ? "v3"
-          : "v2",
+        promptVersion:
+          promptName === "radar-context"
+            ? "v3"
+            : ["radar-report", "radar-audit"].includes(promptName)
+              ? "v4"
+              : promptName === "radar-extract"
+                ? "v3"
+                : "v2",
         model,
         input,
       },
@@ -323,6 +329,13 @@ export async function runRadarJob(
     );
     await save(db, job, async (c) => {
       const targets = await ensureToolTargets(c, job.payload.scanId);
+      const policy =
+        (
+          await c.query("SELECT plan FROM radar_scans WHERE id=$1", [
+            job.payload.scanId,
+          ])
+        ).rows[0].plan.policy ?? globalPolicy(0);
+      const sourceReadiness = optionalSources(process.env);
       // Keep each channel on the same product instead of allowing generic model queries.
       const value = {
         queries: targets.map((t) => ({
@@ -389,11 +402,63 @@ export async function runRadarJob(
             child.id,
           ]);
         }
+      // Add regional sampling without removing the existing US/English jobs.
+      for (const [index, target] of targets.entries()) {
+        const country = policy.storefronts[1 + (index % 3)];
+        const regionalJob = await enqueue(
+          c,
+          "DISCOVER_TOPIC",
+          {
+            scanId: job.payload.scanId,
+            source: "appstore",
+            query: target.product,
+            country,
+            searchLanguage: "unknown",
+            name: `应用商店地区采样 · ${target.product} · ${country}`,
+          },
+          `radar-regional:${job.payload.scanId}:appstore:${target.product}:${country}`,
+        );
+        await c.query("UPDATE jobs SET max_attempts=1 WHERE id=$1", [
+          regionalJob.id,
+        ]);
+        for (const source of sourceReadiness.filter((s) => s.ready)) {
+          const searchLanguage =
+            source.id === "v2ex"
+              ? "zh"
+              : policy.searchLanguages[index % policy.searchLanguages.length];
+          const query =
+            source.id === "v2ex"
+              ? target.product
+              : localizedToolQuery(target.product, searchLanguage);
+          const optionalJob = await enqueue(
+            c,
+            "DISCOVER_TOPIC",
+            {
+              scanId: job.payload.scanId,
+              source: source.id,
+              query,
+              searchLanguage,
+              name: `${source.name} · ${target.product} · ${searchLanguage}`,
+            },
+            `radar-global:${job.payload.scanId}:${source.id}:${target.product}:${searchLanguage}`,
+          );
+          await c.query("UPDATE jobs SET max_attempts=2 WHERE id=$1", [
+            optionalJob.id,
+          ]);
+        }
+      }
       await c.query(
         "UPDATE radar_scans SET status='collecting',plan=plan||$2::jsonb,updated_at=now() WHERE id=$1",
         [
           job.payload.scanId,
-          JSON.stringify({ ...value, websites, redditBrowser, xBrowser }),
+          JSON.stringify({
+            ...value,
+            websites,
+            redditBrowser,
+            xBrowser,
+            policy,
+            sourceReadiness,
+          }),
         ],
       );
     });
@@ -490,6 +555,10 @@ export async function runRadarJob(
           throw Error("上下文核验引用不存在的行号");
       return {
         ...r,
+        marketEvidence: groundMarket(
+          r.userMarket,
+          original.map((l) => l.quote),
+        ),
         painQuote: r.painLine === null ? "" : original[r.painLine].quote,
         unresolvedQuote:
           r.unresolvedLine === null ? "" : original[r.unresolvedLine].quote,
@@ -529,6 +598,8 @@ export async function runRadarJob(
         evidence: {
           ...lines[f.sourceLine],
           quote: f.contextReview.painQuote,
+          originalLanguage: f.contextReview.originalLanguage,
+          userMarket: f.contextReview.marketEvidence,
         },
       }));
     await save(db, job, async (c) => {
@@ -541,7 +612,7 @@ export async function runRadarJob(
             findings,
             rejected,
             contextReviews: grounded,
-            evidencePolicy: "context-v2",
+            evidencePolicy: "global-v1",
           }),
         ],
       );
@@ -591,6 +662,10 @@ export async function runRadarJob(
           risks: text,
           nextStep: text,
           findingIds: z.array(z.enum(ids)).min(1).max(12),
+          opportunityType: z
+            .enum(["tool_gap", "simpler_alternative", "localization"])
+            .default("tool_gap"),
+          targetMarket: text.default("待验证；不以原文语言推断市场"),
         }),
       )
       .max(5),
@@ -604,7 +679,7 @@ export async function runRadarJob(
     {
       findings,
       coverage: scan.coverage,
-      preferences,
+      discoveryPolicy: scan.plan?.policy ?? globalPolicy(0),
       founder,
       analytics: scan.analytics
         ? {
@@ -630,6 +705,7 @@ export async function runRadarJob(
     "radar-audit",
     {
       draft: value,
+      discoveryPolicy: scan.plan?.policy ?? globalPolicy(0),
       findings,
       founder,
       coverage: scan.coverage,
@@ -666,6 +742,13 @@ export async function runRadarJob(
         evidence,
         independentVoices: voices,
         platforms,
+        originalLanguages: [
+          ...new Set(evidence.map((e) => e.originalLanguage ?? "unknown")),
+        ],
+        observedMarkets: evidence
+          .filter((e) => e.userMarket?.status === "stated")
+          .map((e) => ({ ...e.userMarket, documentId: e.documentId })),
+        targetMarketStatus: "hypothesis",
         confidence:
           voices >= 3 && platforms.length >= 2
             ? "多来源信号，仍需付费验证"

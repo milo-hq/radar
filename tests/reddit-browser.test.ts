@@ -253,7 +253,7 @@ test("X requires browser capability, persists public posts and old clients canno
   scanIds.push(scanId);
   const ids = start.json().jobIds;
   assert.equal((await request("start", { source: "reddit" })).statusCode, 409);
-  assert.equal(ids.length, 4);
+  assert.equal(ids.length, 8);
   // Legacy heartbeat explicitly removes capability; it must not receive X jobs.
   await request("heartbeat", { ready: true }, token, origin);
   assert.equal((await request("claim", {}, token, origin)).json().job, null);

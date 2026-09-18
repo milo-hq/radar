@@ -213,3 +213,25 @@ test("crawler catalog uses GET and batches preserve replay identity and provenan
     ),
   );
 });
+
+test("regional review sampling forwards storefront without inferring user market", async () => {
+  await collectReviews(
+    "appstore",
+    "Notion",
+    (async (_url, init) => {
+      const input = JSON.parse(String(init?.body));
+      assert.equal(input.country, "jp");
+      assert.equal(input.query, "Notion");
+      return new Response(
+        JSON.stringify({
+          documents: [],
+          cooldownSeconds: 0,
+          quotaRemaining: null,
+          errors: [],
+          applications: 0,
+        }),
+      );
+    }) as typeof fetch,
+    "jp",
+  );
+});

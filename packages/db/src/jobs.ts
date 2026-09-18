@@ -45,6 +45,8 @@ export function safeError(error: unknown) {
   let message = error instanceof Error ? error.message : String(error);
   for (const secret of [
     process.env.REDDIT_ACCESS_TOKEN,
+    process.env.YOUTUBE_API_KEY,
+    process.env.V2EX_ACCESS_TOKEN,
     process.env.TRANSLATION_API_KEY,
     process.env.OPENAI_API_KEY,
     process.env.DATABASE_URL,

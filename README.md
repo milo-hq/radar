@@ -130,3 +130,13 @@ Docker 的 `crawler_state` 卷保存 SQLite 链接队列、条件请求缓存和
 - 设置、机会详情、自定义搜索按需加载。移动端表格局部横向滚动。
 
 组件参考：[shadcn Vite 安装](https://ui.shadcn.com/docs/installation/vite)、[Data Table](https://ui.shadcn.com/docs/components/radix/data-table)。执行 `npm run build && npx playwright test` 验证核心业务、历史筛选、分页刷新与移动端。
+
+### 全球机会发现
+
+新轮次保留原有英文采集，X 在四个英文产品查询之外增加四个轮换语言查询；App Store 保留美国采样并增加四个地区采样。每轮策略随扫描保存，历史报告不会重新解释。轮换包括西班牙语、葡萄牙语、日语、中文、德语、法语、阿拉伯语和印地语，但这不表示已覆盖全球用户。
+
+可选来源在 `.env` 中配置服务端密钥，然后重建 API / worker 容器：
+- `YOUTUBE_API_KEY`：启用 YouTube Data API v3 的 API key。按产品搜索视频并有限分页读取评论；未配置时不创建任务。
+- `V2EX_ACCESS_TOKEN`：V2EX Personal Access Token。只扫描 `apps` 节点近期主题并按产品过滤、读取回复，不支持全站全文搜索。
+
+界面显示接入状态、实际采集量和失败原因。已配置不等于已验证可访问；小红书、B站、G2、AppSumo 当前只是待接入来源。原文语言、用户明确陈述的市场、目标市场假设分别展示；未知地理位置不从语言或商店地区推断。统计引擎仍使用中英文关键词和词频分组，其他语言的统计召回有限；模型读取原文，机会仍须付费验证。

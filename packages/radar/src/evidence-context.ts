@@ -11,6 +11,13 @@ export const contextReviewSchema = z.object({
         painLine: z.number().int().min(0).nullable(),
         unresolvedLine: z.number().int().min(0).nullable(),
         reason: z.string().min(1),
+        originalLanguage: z.string().max(50).default("unknown"),
+        userMarket: z
+          .object({
+            name: z.string().max(100),
+            line: z.number().int().min(0).nullable(),
+          })
+          .default({ name: "", line: null }),
       }),
     )
     .max(8),

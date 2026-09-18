@@ -11,6 +11,8 @@ export const rawDocumentSchema = z.object({
     "stackoverflow",
     "appstore",
     "wordpress",
+    "youtube",
+    "v2ex",
     "web",
   ]),
   externalId: z.string().min(1).max(1000),

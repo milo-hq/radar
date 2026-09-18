@@ -35,8 +35,8 @@ export function WorkspaceProducts({
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [localize, setLocalize] = useState<string | null>(null),
-    [sourceMarket, setSourceMarket] = useState("美国"),
-    [targetMarket, setTargetMarket] = useState("中东"),
+    [sourceMarket, setSourceMarket] = useState(""),
+    [targetMarket, setTargetMarket] = useState(""),
     [attach, setAttach] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -282,24 +282,10 @@ export function WorkspaceProducts({
                           <p className="ws-muted">
                             借鉴已验证模式，寻找当地差异。A的成功不能证明B的需求；模型不能替代当地竞品调查。
                           </p>
-                          <div className="ws-inline">
-                            {["中东", "欧洲", "亚洲（不含中国）"].map(
-                              (region) => (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  type="button"
-                                  key={region}
-                                  onClick={() => {
-                                    setSourceMarket("美国");
-                                    setTargetMarket(region);
-                                  }}
-                                >
-                                  美国 → {region}
-                                </Button>
-                              ),
-                            )}
-                          </div>
+                          <p className="ws-muted">
+                            可选择任意两个具体国家或地区。普通工具机会无需指定国家；本地化研究需分别验证
+                            A、B 市场。
+                          </p>
                           <label>
                             来源地区 A
                             <Input

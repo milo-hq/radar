@@ -1,3 +1,4 @@
+import { globalPolicy } from "../../core/src/discovery-policy.js";
 import type { PoolClient } from "pg";
 // Seed discovery targets, not claims that these products have unresolved defects.
 const catalog = [
@@ -52,7 +53,7 @@ export async function ensureToolTargets(
   const targets = toolTargets(round);
   await c.query("UPDATE radar_scans SET plan=plan||$2::jsonb WHERE id=$1", [
     scanId,
-    JSON.stringify({ toolTargets: targets }),
+    JSON.stringify({ toolTargets: targets, policy: globalPolicy(round) }),
   ]);
   return targets;
 }
