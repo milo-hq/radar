@@ -1,9 +1,17 @@
+import { readXPage, advanceXPage } from "./x-extractor.js";
 import { readRedditPage, advanceRedditPage } from "./extractor.js";
 const API = "http://127.0.0.1:4317/api/reddit-browser/";
 let busy = false,
   timer;
 async function call(path, body = {}) {
   const { token } = await chrome.storage.local.get("token");
+  if (path === "heartbeat")
+    body = {
+      ...body,
+      xEnabled: await chrome.permissions.contains({
+        origins: ["https://x.com/*"],
+      }),
+    };
   const r = await fetch(API + path, {
     method: "POST",
     headers: {
@@ -67,7 +75,9 @@ async function step() {
         await status("已连接，等待采集任务。");
         return;
       }
+      const isX = job.payload.source === "x";
       if (
+        !isX &&
         !["SaaS", "smallbusiness", "Entrepreneur", "SideProject"].includes(
           job.payload.subreddit,
         )
@@ -85,6 +95,14 @@ async function step() {
           t: "year",
         }).toString();
       }
+      if (isX) {
+        startUrl.href = "https://x.com/search";
+        startUrl.search = new URLSearchParams({
+          q: job.payload.searchQuery,
+          src: "typed_query",
+          f: "live",
+        }).toString();
+      }
       const tab = await chrome.tabs.create({
         url: startUrl.href,
         active: false,
@@ -95,13 +113,16 @@ async function step() {
           tabId: tab.id,
           phase: "list",
           links: [],
+          seen: [],
           round: 0,
           index: 0,
           retries: 0,
           warnings: [],
         },
       });
-      await status(`正在采集 r/${job.payload.subreddit}`);
+      await status(
+        isX ? "正在搜索 X 工具痛点" : `正在采集 r/${job.payload.subreddit}`,
+      );
       return;
     }
     const s = work;
@@ -114,6 +135,62 @@ async function step() {
       return;
     }
     if (tab.status !== "complete") return;
+    if (s.job.payload.source === "x") {
+      if (
+        !(await chrome.permissions.contains({ origins: ["https://x.com/*"] }))
+      ) {
+        await pause(s, "permission_required");
+        return;
+      }
+      const url = new URL(tab.url || "https://invalid.local");
+      if (url.origin !== "https://x.com" || url.pathname !== "/search") {
+        await pause(s, "login_required");
+        return;
+      }
+      if (url.searchParams.get("q") !== s.job.payload.searchQuery) {
+        await pause(s, "page_changed");
+        return;
+      }
+      const read = await inject(s.tabId, readXPage, {});
+      if (["challenge", "login_required"].includes(read?.state)) {
+        await pause(s, read.state);
+        return;
+      }
+      if (!read || read.state === "loading") {
+        s.retries++;
+        if (s.retries >= 6) {
+          await pause(s, "page_changed");
+          return;
+        }
+      } else {
+        s.retries = 0;
+        s.seen ||= [];
+        for (const snapshot of read.snapshots) {
+          if (s.seen.includes(snapshot.postId) || s.seen.length >= 20) continue;
+          await call("snapshot", { ...lease(s), snapshot });
+          s.seen.push(snapshot.postId);
+          await chrome.storage.local.set({ work: s });
+        }
+        s.round++;
+        if (s.round >= 6 || s.seen.length >= 20) {
+          await call("complete", {
+            ...lease(s),
+            warnings: [
+              s.seen.length
+                ? "仅搜索页已渲染正文，未展开回复与长文"
+                : "搜索未返回可读取帖子",
+            ],
+          });
+          await chrome.tabs.remove(s.tabId);
+          await chrome.storage.local.set({ work: null });
+          await status(`X 搜索完成，采集 ${s.seen.length} 条公开帖子。`);
+          return;
+        }
+        await inject(s.tabId, advanceXPage, {});
+      }
+      await chrome.storage.local.set({ work: s });
+      return;
+    }
     if (
       !tab.url?.startsWith(
         "https://www.reddit.com/r/" + s.job.payload.subreddit + "/",

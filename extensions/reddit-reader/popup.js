@@ -18,3 +18,20 @@ for (const type of ["start", "stop"])
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.message) status.textContent = changes.message.newValue;
 });
+
+document.getElementById("enable-x").onclick = async () => {
+  try {
+    const granted = await chrome.permissions.request({
+      origins: ["https://x.com/*"],
+    });
+    status.textContent = granted
+      ? "X 权限已启用，请点连接 / 继续。"
+      : "未授予 X 权限";
+  } catch (e) {
+    status.textContent = e.message;
+  }
+};
+document.getElementById("disable-x").onclick = async () => {
+  await chrome.permissions.remove({ origins: ["https://x.com/*"] });
+  status.textContent = "X 权限已关闭";
+};

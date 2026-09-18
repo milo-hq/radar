@@ -1,5 +1,6 @@
 import {
   enqueueBrowserJobs,
+  enqueueXBrowserJobs,
   expireBrowserJobs,
 } from "../../db/src/reddit-browser.js";
 import {
@@ -320,11 +321,20 @@ export async function runRadarJob(
       (site) => site.enabled,
     );
     await save(db, job, async (c) => {
-      const connected = !!(
+      const browserConnection = (
         await c.query(
-          "SELECT id FROM reddit_browser_connection WHERE id AND enabled AND pause_reason IS NULL AND last_seen_at>now()-interval '90 seconds'",
+          "SELECT id,x_enabled FROM reddit_browser_connection WHERE id AND enabled AND pause_reason IS NULL AND last_seen_at>now()-interval '90 seconds'",
         )
-      ).rowCount;
+      ).rows[0];
+      const connected = !!browserConnection;
+      const xBrowser = {
+        included: connected && browserConnection.x_enabled,
+        reason:
+          connected && browserConnection.x_enabled
+            ? "通过已授权浏览器搜索 X 工具痛点"
+            : "X 浏览器权限未启用或浏览器离线",
+      };
+      if (xBrowser.included) await enqueueXBrowserJobs(c, job.payload.scanId);
       if (connected) await enqueueBrowserJobs(c, job.payload.scanId);
       const redditBrowser = {
         included: connected,
@@ -374,7 +384,7 @@ export async function runRadarJob(
         "UPDATE radar_scans SET status='collecting',plan=$2,updated_at=now() WHERE id=$1",
         [
           job.payload.scanId,
-          JSON.stringify({ ...value, websites, redditBrowser }),
+          JSON.stringify({ ...value, websites, redditBrowser, xBrowser }),
         ],
       );
     });

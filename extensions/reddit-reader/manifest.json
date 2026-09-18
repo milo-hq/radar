@@ -1,14 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "Venture Radar · Reddit Reader",
-  "version": "0.1.0",
+  "name": "Venture Radar · Social Reader",
+  "version": "0.2.0",
   "minimum_chrome_version": "120",
-  "description": "从已登录浏览器读取公开 Reddit 讨论，发送到本机 Venture Radar。",
-  "permissions": ["storage", "scripting", "alarms"],
-  "host_permissions": ["https://www.reddit.com/*", "http://127.0.0.1/*"],
-  "background": { "service_worker": "background.js", "type": "module" },
+  "description": "读取已登录浏览器中的公开 Reddit / X 工具痛点，发送到本机 Radar。",
+  "permissions": [
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://www.reddit.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Venture Radar Reddit"
-  }
+    "default_title": "Venture Radar 公开讨论采集"
+  },
+  "optional_host_permissions": [
+    "https://x.com/*"
+  ]
 }

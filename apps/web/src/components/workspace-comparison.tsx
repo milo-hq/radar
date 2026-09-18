@@ -26,6 +26,7 @@ export function SourceCoverage({ summary }: { summary: any }) {
     wordpress: "WordPress 插件评价",
     web: "网页爬取",
     manual: "手动网页",
+    x: "X (Twitter)",
     reddit: "Reddit",
   };
   return (

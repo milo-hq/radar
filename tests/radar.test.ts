@@ -757,7 +757,7 @@ test("Python stage is lease fenced and engine failures cannot publish analytics"
 
 test("online Reddit browser joins each scan and offline browsers are explicitly skipped", async () => {
   await db.query(
-    "UPDATE reddit_browser_connection SET enabled=true,last_seen_at=now(),pause_reason=null WHERE id",
+    "UPDATE reddit_browser_connection SET enabled=true,x_enabled=false,last_seen_at=now(),pause_reason=null WHERE id",
   );
   try {
     const id = await scan("planning");
@@ -774,7 +774,25 @@ test("online Reddit browser joins each scan and offline browsers are explicitly 
       4,
     );
     await db.query(
-      "UPDATE reddit_browser_connection SET enabled=false WHERE id",
+      "UPDATE reddit_browser_connection SET x_enabled=true WHERE id",
+    );
+    const withX = await scan("planning");
+    await runRadarJob(
+      db,
+      await claimed(await job(withX, "RADAR_PLAN")),
+      provider(() => plan),
+      model,
+      { sites: async () => [] },
+    );
+    assert.equal(
+      (await jobs(withX, "DISCOVER_TOPIC")).filter(
+        (j) => j.payload.source === "x",
+      ).length,
+      4,
+    );
+    assert.equal((await state(withX)).plan.xBrowser.included, true);
+    await db.query(
+      "UPDATE reddit_browser_connection SET enabled=false,x_enabled=false WHERE id",
     );
     const offline = await scan("planning");
     await runRadarJob(

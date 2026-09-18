@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-  <meta charset="utf-8" /><title>Reddit Reader</title
+  <meta charset="utf-8" /><title>Social Reader</title
   ><style>
     body {
       font: 14px system-ui;
@@ -26,7 +26,7 @@
       color: #64748b;
     }
   </style>
-  <h2>Reddit 浏览器采集</h2>
+  <h2>Reddit / X 公开讨论采集</h2>
   <p>
     使用当前 Chrome 登录状态读取公开社区。仅向本机 Radar 发送帖子与评论，不读取
     Cookie 或私信。
@@ -35,6 +35,8 @@
     >本地连接码<input id="token" type="password" autocomplete="off" /></label
   ><button id="start">连接 / 继续</button
   ><button id="stop">停止</button>
+  <button id="enable-x">启用 X 访问</button
+  ><button id="disable-x">关闭 X 访问</button>
   <p id="status" role="status"></p>
   <small
     >在 Radar 设置页生成连接码。保持 Chrome

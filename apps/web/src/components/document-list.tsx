@@ -18,6 +18,7 @@ const sources: Record<string, string> = {
   github: "GitHub Issues",
   stackoverflow: "Stack Overflow",
   appstore: "App Store 用户评论",
+  x: "X (Twitter)",
   wordpress: "WordPress 插件评价",
   web: "公开网站",
   winner: "WINNER",

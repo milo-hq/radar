@@ -6,10 +6,12 @@ import { transaction } from "../../../packages/db/src/index.js";
 import { insertDocuments } from "../../../packages/db/src/repository.js";
 import {
   enqueueBrowserJobs,
+  enqueueXBrowserJobs,
   expireBrowserJobs,
   redditCommunities,
 } from "../../../packages/db/src/reddit-browser.js";
 import { parseBrowserSnapshot } from "../../../packages/connectors/src/reddit-browser.js";
+import { parseXSnapshot } from "../../../packages/connectors/src/x-browser.js";
 const digest = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 const leaseSchema = z.object({ jobId: z.uuid(), lease: z.uuid() });
@@ -19,6 +21,7 @@ const reasons = z.enum([
   "page_changed",
   "browser_closed",
   "user_paused",
+  "permission_required",
 ]);
 const conflict = () =>
   Object.assign(Error("Browser lease expired"), { statusCode: 409 });
@@ -64,7 +67,7 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
   app.get("/api/reddit-browser", async () => {
     const connection = (
       await db.query(
-        "SELECT enabled,last_seen_at,pause_reason,token_hash IS NOT NULL paired,last_seen_at>now()-interval '90 seconds' online FROM reddit_browser_connection WHERE id",
+        "SELECT enabled,x_enabled,last_seen_at,pause_reason,token_hash IS NOT NULL paired,last_seen_at>now()-interval '90 seconds' online FROM reddit_browser_connection WHERE id",
       )
     ).rows[0];
     const jobs = (
@@ -98,33 +101,55 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
     });
     return { ok: true };
   });
-  app.post("/api/reddit-browser/start", async (_r, reply) =>
+  app.post("/api/reddit-browser/start", async (r, reply) =>
     transaction(db, async (c) => {
+      const source = z
+        .object({ source: z.enum(["reddit", "x"]).default("reddit") })
+        .parse(r.body ?? {}).source;
       const connected = (
         await c.query(
-          "SELECT id FROM reddit_browser_connection WHERE id AND enabled AND pause_reason IS NULL AND last_seen_at>now()-interval '90 seconds' FOR UPDATE",
+          "SELECT id,x_enabled FROM reddit_browser_connection WHERE id AND enabled AND pause_reason IS NULL AND last_seen_at>now()-interval '90 seconds' FOR UPDATE",
         )
-      ).rowCount;
+      ).rows[0];
       if (!connected)
         return reply.code(409).send({ error: "请先连接并启动浏览器扩展" });
+      if (source === "x" && !connected.x_enabled)
+        return reply.code(409).send({ error: "请先在扩展中启用 X 访问权限" });
       await expireBrowserJobs(c);
       const active = (
         await c.query(
-          "SELECT id FROM jobs WHERE payload->>'transport'='reddit_browser' AND status IN ('pending','running')",
+          "SELECT id,payload->>'source' source FROM jobs WHERE payload->>'transport'='reddit_browser' AND status IN ('pending','running')",
         )
       ).rows;
-      if (active.length) return { jobIds: active.map((j) => j.id) };
+      if (active.length) {
+        const sameSource = active.filter((j) => j.source === source);
+        if (!sameSource.length)
+          return reply
+            .code(409)
+            .send({
+              error: "另一来源正在采集，请等当前浏览器任务完成后再启动",
+            });
+        return { jobIds: sameSource.map((j) => j.id) };
+      }
       const scan = (
         await c.query(
           "INSERT INTO radar_scans(status,plan) VALUES('collecting',$1) RETURNING id",
           [
             JSON.stringify({
-              redditBrowser: { included: true, reason: "浏览器专项采集" },
+              [source === "x" ? "xBrowser" : "redditBrowser"]: {
+                included: true,
+                reason: "浏览器专项采集",
+              },
             }),
           ],
         )
       ).rows[0];
-      return { scanId: scan.id, jobIds: await enqueueBrowserJobs(c, scan.id) };
+      return {
+        scanId: scan.id,
+        jobIds: await (
+          source === "x" ? enqueueXBrowserJobs : enqueueBrowserJobs
+        )(c, scan.id),
+      };
     }),
   );
   const agent = (
@@ -140,6 +165,7 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
     const b = z
       .object({
         ready: z.boolean().default(false),
+        xEnabled: z.boolean().default(false),
         enabled: z.boolean().default(true),
         jobId: z.uuid().optional(),
         lease: z.uuid().optional(),
@@ -158,8 +184,8 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
         );
       }
       await c.query(
-        "UPDATE reddit_browser_connection SET last_seen_at=now(),enabled=$2,pause_reason=CASE WHEN $1 THEN null ELSE pause_reason END WHERE id",
-        [b.ready, b.enabled],
+        "UPDATE reddit_browser_connection SET last_seen_at=now(),enabled=$2,x_enabled=$3,pause_reason=CASE WHEN $1 THEN null ELSE pause_reason END WHERE id",
+        [b.ready, b.enabled, b.xEnabled],
       );
       return { ok: true };
     });
@@ -184,7 +210,8 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
       const job =
         (
           await c.query(
-            "UPDATE jobs SET status='running',attempts=attempts+1,lock_token=gen_random_uuid(),locked_until=now()+interval '3 minutes',last_error=null,updated_at=now() WHERE id=(SELECT id FROM jobs WHERE payload->>'transport'='reddit_browser' AND attempts<max_attempts AND ((status='pending' AND run_at<=now()) OR (status='running' AND locked_until<now())) ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING id,payload,lock_token",
+            "UPDATE jobs SET status='running',attempts=attempts+1,lock_token=gen_random_uuid(),locked_until=now()+interval '3 minutes',last_error=null,updated_at=now() WHERE id=(SELECT id FROM jobs WHERE payload->>'transport'='reddit_browser' AND (payload->>'source'<>'x' OR $1::boolean) AND attempts<max_attempts AND ((status='pending' AND run_at<=now()) OR (status='running' AND locked_until<now())) ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING id,payload,lock_token",
+            [connection.x_enabled],
           )
         ).rows[0] ?? null;
       return { job };
@@ -194,7 +221,10 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
     const b = leaseSchema.extend({ snapshot: z.unknown() }).parse(r.body);
     return browserTransaction(db, r, async (c) => {
       const job = await held(c, b),
-        docs = parseBrowserSnapshot(b.snapshot, job.payload.subreddit);
+        docs =
+          job.payload.source === "x"
+            ? parseXSnapshot(b.snapshot, job.payload.searchQuery)
+            : parseBrowserSnapshot(b.snapshot, job.payload.subreddit);
       const inserted = await c.query(
         "INSERT INTO reddit_browser_snapshots VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING post_id",
         [job.id, docs[0].externalId],

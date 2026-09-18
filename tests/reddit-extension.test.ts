@@ -9,7 +9,7 @@ import { buildApp } from "../apps/api/src/app.js";
 
 test(
   "real MV3 extension claims, renders and uploads to the application without a Reddit network request",
-  { timeout: 90000 },
+  { timeout: 140000 },
   async () => {
     const db = new Pool({
       connectionString:
@@ -23,18 +23,29 @@ test(
     let context: any;
     let jobIds: string[] = [];
     let scanId: string | undefined;
+    let xScanId: string | undefined;
     try {
       const extension = join(root, "extension");
       await cp(resolve("extensions/reddit-reader"), extension, {
         recursive: true,
       });
+      const manifestPath = join(extension, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      // This isolated fixture grants X only in its temporary profile, never the user browser.
+      manifest.host_permissions.push("https://x.com/*");
+      await writeFile(manifestPath, JSON.stringify(manifest));
       const background = join(extension, "background.js");
       await writeFile(
         background,
-        (await readFile(background, "utf8")).replace(
-          "127.0.0.1:4317",
-          "127.0.0.1:" + address.port,
-        ),
+        (await readFile(background, "utf8"))
+          .replace("127.0.0.1:4317", "127.0.0.1:" + address.port)
+          .replace("work ? 5000 : 15000", "work ? 150 : 300")
+          // Let Playwright attach request routing before the extension tab navigates.
+          .replace("url: startUrl.href,", 'url: "about:blank",')
+          .replace(
+            "await chrome.storage.local.set({\n        work: {",
+            "await new Promise(r=>setTimeout(r,300)); await chrome.tabs.update(tab.id,{url:startUrl.href});\n      await chrome.storage.local.set({\n        work: {",
+          ),
       );
       context = await chromium.launchPersistentContext(join(root, "profile"), {
         channel: "chromium",
@@ -43,6 +54,14 @@ test(
           `--disable-extensions-except=${extension}`,
           `--load-extension=${extension}`,
         ],
+      });
+      // Never let an unmatched third-party request escape the test fixture.
+      await context.route("**/*", (route: any) => {
+        const u = new URL(route.request().url());
+        return ["127.0.0.1"].includes(u.hostname) ||
+          u.protocol === "chrome-extension:"
+          ? route.continue()
+          : route.abort();
       });
       const searchRequests: URL[] = [];
       await context.route("https://www.reddit.com/**", (route: any) => {
@@ -60,6 +79,18 @@ test(
           body: `<shreddit-post id="t3_fixture1" post-title="Searching docs takes hours" subreddit-name="${sub}" post-type="text" author="fixture" user-logged-in comment-count="1" permalink="/r/${sub}/comments/fixture1/search/"><div id="t3_fixture1-post-rtjson-content">We cannot find documents and waste two hours each week.</div></shreddit-post><shreddit-comment thingid="t1_reply1" depth="0" postid="t3_fixture1" author="reader"><div id="t1_reply1-post-rtjson-content">We also need better search.</div></shreddit-comment>`,
         });
       });
+      await context.route(/https:\/\/x\.com\/.*/, (route: any) =>
+        route.fulfill({
+          contentType: "text/html",
+          body:
+            `<button data-testid="SideNav_AccountSwitcher_Button">Account</button>` +
+            Array.from(
+              { length: 20 },
+              (_, i) =>
+                `<article data-testid="tweet"><a href="/buyer/status/${10000 + i}"><time datetime="2026-09-18T00:00:00Z">Now</time></a><div data-testid="tweetText">Tool exports require manual work ${i}.</div></article>`,
+            ).join(""),
+        }),
+      );
       const worker =
         context.serviceWorkers()[0] ??
         (await context.waitForEvent("serviceworker"));
@@ -168,6 +199,59 @@ test(
         false,
         "an expired work lease must close its owned tab",
       );
+      const xStart = await app.inject({
+        method: "POST",
+        url: "/api/reddit-browser/start",
+        payload: { source: "x" },
+      });
+      assert.equal(xStart.statusCode, 200);
+      xScanId = xStart.json().scanId;
+      const xIds = xStart.json().jobIds;
+      await db.query(
+        "UPDATE jobs SET status='failed' WHERE id=ANY($1::uuid[])",
+        [xIds.slice(1)],
+      );
+      await popup.locator("#start").click();
+      let xJob: any;
+      for (let i = 0; i < 45; i++) {
+        xJob = (await db.query("SELECT * FROM jobs WHERE id=$1", [xIds[0]]))
+          .rows[0];
+        if (xJob.status === "succeeded" || xJob.last_error) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      assert.equal(
+        xJob.status,
+        "succeeded",
+        JSON.stringify({
+          job: xJob,
+          pages: await Promise.all(
+            context.pages().map(async (p: any) => ({
+              url: p.url(),
+              text: await p
+                .locator("body")
+                .innerText()
+                .catch(() => ""),
+            })),
+          ),
+          tabs: await worker.evaluate(async () =>
+            (globalThis as any).chrome.tabs.query({}),
+          ),
+        }),
+      );
+      assert.equal(xJob.payload.matchedCount, 20);
+      const xDocs = (
+        await db.query(
+          "SELECT d.source_id,d.metadata FROM raw_documents d JOIN discovery_documents dd ON dd.document_id=d.id WHERE dd.job_id=$1",
+          [xJob.id],
+        )
+      ).rows;
+      assert.equal(xDocs.length, 20);
+      assert.ok(
+        xDocs.every(
+          (d: any) =>
+            d.source_id === "x" && d.metadata.contextComplete === false,
+        ),
+      );
     } finally {
       await context?.close();
       await app.inject({
@@ -175,6 +259,10 @@ test(
         url: "/api/reddit-browser/disconnect",
         payload: {},
       });
+      if (xScanId)
+        await db.query("UPDATE radar_scans SET status='failed' WHERE id=$1", [
+          xScanId,
+        ]);
       if (scanId)
         await db.query("UPDATE radar_scans SET status='failed' WHERE id=$1", [
           scanId,

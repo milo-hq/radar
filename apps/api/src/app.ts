@@ -124,6 +124,7 @@ export async function buildApp(db: Pool) {
             "manual",
             "winner",
             "reddit",
+            "x",
             "hn",
             "github",
             "stackoverflow",
@@ -240,11 +241,9 @@ export async function buildApp(db: Pool) {
       )
     ).rowCount;
     if (browserJob)
-      return reply
-        .code(409)
-        .send({
-          error: "浏览器任务请在设置中重新采集 Reddit；历史轮次保持原结果。",
-        });
+      return reply.code(409).send({
+        error: "浏览器任务请在设置中重新采集 Reddit 或 X；历史轮次保持原结果。",
+      });
     const result = await db.query(
       "UPDATE jobs SET status='pending',attempts=0,run_at=now(),lock_token=null,locked_until=null,updated_at=now() WHERE id=$1 AND status='failed' RETURNING id",
       [id],

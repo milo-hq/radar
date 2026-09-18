@@ -5,6 +5,7 @@ export const rawDocumentSchema = z.object({
     "manual",
     "winner",
     "reddit",
+    "x",
     "hn",
     "github",
     "stackoverflow",

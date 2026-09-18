@@ -17,10 +17,11 @@ const states: Record<string, string> = {
   failed: "失败",
 };
 const reasons: Record<string, string> = {
-  login_required: "需要登录 Reddit",
+  login_required: "需要登录当前采集网站",
   challenge: "需要在浏览器完成验证",
   page_changed: "页面结构未识别",
   browser_closed: "采集标签页被关闭",
+  permission_required: "需要在扩展中启用 X 访问权限",
   user_paused: "已手动暂停",
 };
 export function RedditBrowserSettings({
@@ -47,17 +48,20 @@ export function RedditBrowserSettings({
       live = false;
     };
   }, [revision]);
-  async function act(action: string) {
+  async function act(action: string, source = "reddit") {
     setBusy(true);
     setError("");
     try {
-      const result = await api("/reddit-browser/" + action, {});
+      const result = await api(
+        "/reddit-browser/" + action,
+        action === "start" ? { source } : {},
+      );
       if (action === "pair") setToken(result.token);
       if (action === "disconnect") setToken("");
       setData(await api("/reddit-browser"));
       notice(
         action === "start"
-          ? "Reddit 采集已排队，完成后自动分析"
+          ? `${source === "x" ? "X" : "Reddit"} 采集已排队，完成后自动分析`
           : action === "pair"
             ? "连接码已生成，请在扩展中粘贴"
             : "连接已断开",
@@ -72,7 +76,7 @@ export function RedditBrowserSettings({
   const online = c?.enabled && c?.online && !c?.pause_reason;
   return (
     <section className="panel connection-panel min-w-0">
-      <h2>Reddit 浏览器采集</h2>
+      <h2>Reddit / X 浏览器采集</h2>
       <p className="muted">
         {c?.pause_reason
           ? reasons[c.pause_reason] || c.pause_reason
@@ -89,6 +93,12 @@ export function RedditBrowserSettings({
           "4 个相关社区"}
         ，搜索近一年中的替代品、价格不满、手工操作与功能缺口，无需填写主题。每社区最多
         6 帖，每帖最多 30 条可见评论；部分内容会标注上下文不完整。
+      </p>
+      <p className="text-sm leading-6">
+        X：{c?.x_enabled ? "权限已启用" : "尚未启用"}。在扩展弹窗点“启用 X
+        访问”，确认权限并登录 X，再点“连接 / 继续”。每轮 4
+        组工具痛点搜索，每组最多 20
+        条公开帖子；未展开回复、引用与长文，不视为完整讨论。
       </p>
       <details className="my-3 text-sm">
         <summary className="cursor-pointer">首次安装与连接</summary>
@@ -124,6 +134,13 @@ export function RedditBrowserSettings({
           onClick={() => act("start")}
         >
           采集 Reddit 并分析
+        </Button>
+        <Button
+          size="sm"
+          disabled={busy || !online || !c?.x_enabled}
+          onClick={() => act("start", "x")}
+        >
+          采集 X 并分析
         </Button>
         {c?.paired && (
           <Button
@@ -167,7 +184,7 @@ export function RedditBrowserSettings({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>社区 / 时间</TableHead>
+              <TableHead>来源 / 搜索 / 时间</TableHead>
               <TableHead>状态</TableHead>
               <TableHead>已入库</TableHead>
             </TableRow>
@@ -176,7 +193,11 @@ export function RedditBrowserSettings({
             {data.jobs.map((j: any) => (
               <TableRow key={j.id}>
                 <TableCell>
-                  <div>r/{j.payload.subreddit}</div>
+                  <div className="max-w-80 whitespace-normal break-words">
+                    {j.payload.source === "x"
+                      ? `X · ${j.payload.searchQuery}`
+                      : `r/${j.payload.subreddit}`}
+                  </div>
                   <small>{when(j.created_at)}</small>
                 </TableCell>
                 <TableCell>

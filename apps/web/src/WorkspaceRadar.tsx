@@ -520,8 +520,8 @@ export function WorkspaceRadar({
                 检索渠道包括 HN、GitHub Issues、Stack Overflow、App Store 与
                 WordPress
                 插件评论，以及用户社区、产品目录和官网网页爬取。已连接浏览器时还会加入
-                Reddit
-                公开讨论。各渠道可能没有返回材料，实际采集量以下方数字为准。
+                Reddit 公开讨论；启用 X 权限后也会搜索 X
+                公开帖子。各渠道可能没有返回材料，实际采集量以下方数字为准。
                 模型提取每篇前 4000
                 字符，可能缺少完整后续讨论；搜索命中不等于需求成立。
               </p>
@@ -540,6 +540,9 @@ export function WorkspaceRadar({
             <p className="ws-muted">
               Reddit：{(scan.plan as any).redditBrowser.reason}
             </p>
+          )}
+          {(scan.plan as any)?.xBrowser && (
+            <p className="ws-muted">X：{(scan.plan as any).xBrowser.reason}</p>
           )}
           {!!scan.plan?.queries?.length && (
             <details className="ws-radar-plan">
