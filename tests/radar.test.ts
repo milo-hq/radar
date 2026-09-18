@@ -38,10 +38,24 @@ afterEach(async () => {
 after(() => db.end());
 const provider = (
   respond: (request: ModelRequest) => unknown | Promise<unknown>,
+  contextRespond = (request: ModelRequest): unknown => ({
+    reviews: (request.input as any).candidates.map((c: any) => ({
+      findingIndex: c.findingIndex,
+      role: "direct_user",
+      status: "unresolved",
+      tool: "Fixture tool",
+      task: "Fixture task",
+      painLine: c.lines.length - 1,
+      unresolvedLine: c.lines.length - 1,
+      reason: "Fixture context decision",
+    })),
+  }),
 ): LLMProvider => ({
   async generateStructured<T>(request: ModelRequest) {
     return {
-      value: (await respond(request)) as T,
+      value: (request.promptName === "radar-context"
+        ? await contextRespond(request)
+        : await respond(request)) as T,
       inputTokens: 1,
       outputTokens: 1,
       estimatedCost: null,
@@ -293,11 +307,25 @@ test("extraction rejects invented source lines and report rejects invented IDs b
   await runRadarJob(
     db,
     extract,
-    provider((request) => {
-      assert.equal(request.promptName, "radar-extract");
-      assert.equal((request.input as any).lines[1].sourceLine, 1);
-      return { findings: [finding(1), finding(0)] };
-    }),
+    provider(
+      (request) => {
+        assert.equal(request.promptName, "radar-extract");
+        assert.equal((request.input as any).lines[1].sourceLine, 1);
+        return { findings: [finding(1), finding(0)] };
+      },
+      (request) => ({
+        reviews: (request.input as any).candidates.map((c: any) => ({
+          findingIndex: c.findingIndex,
+          role: "direct_user",
+          status: "unresolved",
+          tool: "Fixture",
+          task: "Task",
+          painLine: 1 - c.findingIndex,
+          unresolvedLine: 1 - c.findingIndex,
+          reason: "Fixture",
+        })),
+      }),
+    ),
     model,
   );
   const batch = (
@@ -916,4 +944,103 @@ test("empty analyzed reports explain evidence filtering rather than claiming col
   assert.match(report.rejectedSummary, /已分析 1/);
   assert.match(report.rejectedSummary, /供给方/);
   assert.doesNotMatch(report.rejectedSummary, /采集为空/);
+});
+
+test("context review rejects misleading excerpts but preserves a developer's remaining workaround", async () => {
+  const id = await scan("analyzing");
+  const bodies = [
+    "Built an n8n workflow that automates quote-request handling for suppliers.\nIt now drafts replies automatically.",
+    "I gave an agent access to Notion.\nThe gateway blocked the write as designed.",
+    "I built a script for ToolX, but still spend two hours merging broken exports.",
+  ];
+  const docs = await saveDocuments(
+    db,
+    bodies.map((body, i) => ({
+      sourceKey: "x",
+      externalId: crypto.randomUUID(),
+      canonicalUrl: "https://x.com/fixture/status/" + (900 + i),
+      type: "post" as const,
+      body,
+      metadata: { test: true, contextComplete: false },
+    })),
+  );
+  const current = await claimed(
+    await job(id, "RADAR_EXTRACT", { documentIds: docs.map((d) => d.id) }),
+  );
+  let contextSeen = false;
+  await runRadarJob(
+    db,
+    current,
+    provider(
+      (request) => {
+        const lines = (request.input as any).lines;
+        return {
+          findings: bodies.map((body) =>
+            finding(
+              lines.findIndex((l: any) => l.quote === body.split("\n")[0]),
+            ),
+          ),
+        };
+      },
+      (request) => {
+        contextSeen = true;
+        const candidates = (request.input as any).candidates;
+        assert.equal(
+          candidates[1].lines.map((l: any) => l.quote).join("\n"),
+          bodies[1],
+        );
+        assert.equal(candidates[1].contextComplete, false);
+        return {
+          reviews: candidates.map((c: any, i: number) => ({
+            findingIndex: i,
+            role: i === 0 ? "seller" : "direct_user",
+            status: i < 2 ? "resolved" : "unresolved",
+            tool: "ToolX",
+            task: "导出合并",
+            painLine: 0,
+            unresolvedLine: 0,
+            reason: i < 2 ? "演示已完成的功能" : "仍然需要手工操作",
+          })),
+        };
+      },
+    ),
+    model,
+  );
+  const result = (
+    await db.query("SELECT result FROM radar_batches WHERE job_id=$1", [
+      current.id,
+    ])
+  ).rows[0].result;
+  assert.ok(contextSeen);
+  assert.equal(result.findings.length, 1);
+  assert.match(result.findings[0].evidence.quote, /still spend two hours/);
+  assert.equal(result.rejected.length, 2);
+  assert.equal(result.contextReviews.length, 3);
+});
+test("missing context decisions cannot silently turn into zero findings", async () => {
+  const id = await scan("analyzing");
+  const [doc] = await documents(1);
+  const current = await claimed(
+    await job(id, "RADAR_EXTRACT", { documentIds: [doc.id] }),
+  );
+  await assert.rejects(
+    runRadarJob(
+      db,
+      current,
+      provider(
+        () => ({ findings: [finding(1)] }),
+        () => ({ reviews: [] }),
+      ),
+      model,
+    ),
+    /不完整/,
+  );
+  assert.equal(
+    (
+      await db.query("SELECT * FROM radar_batches WHERE job_id=$1", [
+        current.id,
+      ])
+    ).rowCount,
+    0,
+  );
 });

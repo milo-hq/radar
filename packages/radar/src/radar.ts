@@ -1,3 +1,4 @@
+import { contextReviewSchema, contextBlocker } from "./evidence-context.js";
 import { ensureToolTargets, productQuery } from "../../db/src/tool-search.js";
 import {
   enqueueBrowserJobs,
@@ -443,6 +444,63 @@ export async function runRadarJob(
       },
       schema,
     );
+    // Separate evidence-role review reads context instead of trusting the selected line.
+    const reviewInput = value.findings.map((f, findingIndex) => {
+      const doc = docs.find((d) => d.id === lines[f.sourceLine].documentId)!;
+      return {
+        findingIndex,
+        lines: String(doc.body)
+          .slice(0, 12000)
+          .split(/\r?\n/)
+          .filter((line) => line.trim())
+          .map((quote, index) => ({ index, quote })),
+        truncated: doc.body.length > 12000,
+        contextComplete: doc.metadata?.contextComplete ?? false,
+      };
+    });
+    if (
+      !(
+        await db.query(
+          "UPDATE jobs SET locked_until=now()+interval '120 seconds' WHERE id=$1 AND lock_token=$2 AND status='running' AND locked_until>now()",
+          [job.id, job.lock_token],
+        )
+      ).rowCount
+    )
+      throw Error("自动发现任务租约失效");
+    const reviewed = value.findings.length
+      ? (
+          await run(
+            "radar-context",
+            { candidates: reviewInput },
+            contextReviewSchema,
+          )
+        ).value.reviews
+      : [];
+    if (
+      reviewed.length !== value.findings.length ||
+      new Set(reviewed.map((r) => r.findingIndex)).size !==
+        value.findings.length ||
+      reviewed.some((r) => r.findingIndex >= value.findings.length)
+    )
+      throw Error("上下文核验结果不完整或重复，不能发布需求信号");
+    const grounded = reviewed.map((r) => {
+      const original = reviewInput[r.findingIndex].lines;
+      for (const index of [r.painLine, r.unresolvedLine])
+        if (index !== null && !original[index])
+          throw Error("上下文核验引用不存在的行号");
+      return {
+        ...r,
+        painQuote: r.painLine === null ? "" : original[r.painLine].quote,
+        unresolvedQuote:
+          r.unresolvedLine === null ? "" : original[r.unresolvedLine].quote,
+      };
+    });
+    const reviews = new Map(grounded.map((r) => [r.findingIndex, r]));
+    const reasonFor = (index: number) =>
+      contextBlocker(
+        reviews.get(index)!,
+        reviewInput[index].lines.map((l) => l.quote).join("\n"),
+      );
     const productIds = new Set(
       docs
         .filter((d) =>
@@ -450,28 +508,42 @@ export async function runRadarJob(
         )
         .map((d) => d.id),
     );
-    const rejected = value.findings.flatMap((f) => {
+    const rejected = value.findings.flatMap((f, index) => {
       const evidence = lines[f.sourceLine];
       const reason = productIds.has(evidence.documentId)
         ? "官网/目录不能作为需求证据"
-        : demandEvidenceBlocker(evidence.quote);
+        : (demandEvidenceBlocker(evidence.quote) ?? reasonFor(index));
       return reason ? [{ evidence, reason }] : [];
     });
     const findings = value.findings
+      .map((f, index) => ({ ...f, contextReview: reviews.get(index)! }))
       .filter(
-        (f) =>
+        (f, index) =>
+          !reasonFor(index) &&
           !productIds.has(lines[f.sourceLine].documentId) &&
           !demandEvidenceBlocker(lines[f.sourceLine].quote),
       )
       .map((f, index) => ({
         ...f,
         id: `${job.id}:${index}`,
-        evidence: lines[f.sourceLine],
+        evidence: {
+          ...lines[f.sourceLine],
+          quote: f.contextReview.painQuote,
+        },
       }));
     await save(db, job, async (c) => {
       await c.query(
         "INSERT INTO radar_batches(job_id,scan_id,result) VALUES($1,$2,$3)",
-        [job.id, job.payload.scanId, JSON.stringify({ findings, rejected })],
+        [
+          job.id,
+          job.payload.scanId,
+          JSON.stringify({
+            findings,
+            rejected,
+            contextReviews: grounded,
+            evidencePolicy: "context-v2",
+          }),
+        ],
       );
     });
     return;

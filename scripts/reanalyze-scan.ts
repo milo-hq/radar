@@ -7,11 +7,11 @@ const original = z.uuid().parse(process.argv[2]);
 try {
   const result = await transaction(pool, async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
-      "reanalysis:v3:" + original,
+      "reanalysis:context-v2:" + original,
     ]);
     const existing = (
       await c.query(
-        "SELECT id,status FROM radar_scans WHERE plan->>'reanalysisOf'=$1 AND plan->>'evidencePolicy'='v3' ORDER BY created_at DESC LIMIT 1",
+        "SELECT id,status FROM radar_scans WHERE plan->>'reanalysisOf'=$1 AND plan->>'evidencePolicy'='context-v2' ORDER BY created_at DESC LIMIT 1",
         [original],
       )
     ).rows[0];
@@ -37,7 +37,7 @@ try {
         [
           JSON.stringify({
             reanalysisOf: original,
-            evidencePolicy: "v3",
+            evidencePolicy: "context-v2",
             note: "使用历史原文重新分析，没有新增采集",
           }),
           JSON.stringify(coverage),
