@@ -38,6 +38,15 @@ export async function enqueueBrowserJobs(c: PoolClient, scanId?: string) {
   return ids;
 }
 export async function expireBrowserJobs(db: Pool | PoolClient) {
+  // An offline extension cannot finish its queued work. Preserve any live lease
+  // and allow a short reconnection window before advancing with partial evidence.
+  await db.query(
+    `UPDATE jobs SET status='failed',last_error='浏览器离线超过5分钟，本轮跳过剩余浏览器采集；已保存材料继续分析，恢复连接后可开启新一轮',locked_until=null,updated_at=now()
+     WHERE payload->>'transport'='reddit_browser' AND status IN ('pending','running')
+       AND created_at<now()-interval '5 minutes'
+       AND (locked_until IS NULL OR locked_until<now())
+       AND NOT EXISTS (SELECT 1 FROM reddit_browser_connection WHERE id AND last_seen_at>now()-interval '5 minutes')`,
+  );
   await db.query(
     `UPDATE jobs SET status='failed',last_error='浏览器采集等待超时；请恢复连接后重新采集',locked_until=null,updated_at=now() WHERE payload->>'transport'='reddit_browser' AND status IN ('pending','running') AND ((payload->>'deadlineAt')::timestamptz<now() OR (status='running' AND locked_until<now() AND attempts>=max_attempts))`,
   );

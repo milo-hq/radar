@@ -1,3 +1,4 @@
+import { expireBrowserJobs } from "../packages/db/src/reddit-browser.js";
 import { parseBrowserSnapshot } from "../packages/connectors/src/reddit-browser.js";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -303,4 +304,63 @@ test("X requires browser capability, persists public posts and old clients canno
       .rows[0].status,
     "analyzing",
   );
+});
+
+test("offline browser jobs expire early without discarding live leases or fresh work", async () => {
+  const ids: string[] = [];
+  const saved = (
+    await db.query("SELECT * FROM reddit_browser_connection WHERE id")
+  ).rows[0];
+  try {
+    await db.query(
+      "UPDATE reddit_browser_connection SET last_seen_at=now()-interval '10 minutes' WHERE id",
+    );
+    for (const [status, age, lease] of [
+      ["pending", 10, null],
+      ["running", 10, -5],
+      ["running", 10, 2],
+      ["pending", 1, null],
+    ] as const) {
+      const r = await db.query(
+        "INSERT INTO jobs(type,payload,idempotency_key,status,created_at,locked_until) VALUES('DISCOVER_TOPIC',$1,$2,$3,now()-make_interval(mins=>$4),CASE WHEN $5::int IS NULL THEN null ELSE now()+make_interval(mins=>$5) END) RETURNING id",
+        [
+          JSON.stringify({
+            transport: "reddit_browser",
+            source: "x",
+            deadlineAt: new Date(Date.now() + 20 * 60000).toISOString(),
+          }),
+          crypto.randomUUID(),
+          status,
+          age,
+          lease,
+        ],
+      );
+      ids.push(r.rows[0].id);
+    }
+    await expireBrowserJobs(db);
+    const states = await Promise.all(
+      ids.map(
+        async (id) =>
+          (
+            await db.query("SELECT status,last_error FROM jobs WHERE id=$1", [
+              id,
+            ])
+          ).rows[0],
+      ),
+    );
+    assert.deepEqual(
+      states.map((s) => s.status),
+      ["failed", "failed", "running", "pending"],
+    );
+    assert.match(states[0].last_error, /离线/);
+  } finally {
+    await db.query(
+      "UPDATE jobs SET status='failed',locked_until=null WHERE id=ANY($1::uuid[])",
+      [ids],
+    );
+    await db.query(
+      "UPDATE reddit_browser_connection SET last_seen_at=$1 WHERE id",
+      [saved.last_seen_at],
+    );
+  }
 });
