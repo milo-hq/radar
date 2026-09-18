@@ -73,8 +73,20 @@ async function step() {
         )
       )
         throw Error("未知社区");
+      const startUrl = new URL(
+        `https://www.reddit.com/r/${job.payload.subreddit}/new/`,
+      );
+      if (job.payload.searchQuery) {
+        startUrl.pathname = `/r/${job.payload.subreddit}/search/`;
+        startUrl.search = new URLSearchParams({
+          q: job.payload.searchQuery,
+          restrict_sr: "1",
+          sort: "relevance",
+          t: "year",
+        }).toString();
+      }
       const tab = await chrome.tabs.create({
-        url: `https://www.reddit.com/r/${job.payload.subreddit}/new/`,
+        url: startUrl.href,
         active: false,
       });
       await chrome.storage.local.set({

@@ -27,7 +27,7 @@ export function readRedditPage({ subreddit }) {
       p.getAttribute("subreddit-name")?.toLowerCase() ===
         subreddit.toLowerCase(),
   );
-  const links = posts
+  let links = posts
     .filter(
       (p) =>
         p.getAttribute("post-type") !== "image" &&
@@ -46,7 +46,50 @@ export function readRedditPage({ subreddit }) {
     })
     .filter(Boolean);
   const path = location.pathname.match(/^\/r\/([^/]+)\/comments\/([a-z0-9]+)/i);
-  if (!path) return { state: "ready", links };
+  if (!path) {
+    // Reddit search renders link cards rather than shreddit-post elements.
+    if (location.pathname.endsWith("/search/")) {
+      // A title heuristic chooses what to read first; it is not demand evidence.
+      const score = (a) => {
+        const title = a.innerText || "";
+        const pain =
+          /alternative|too expensive|missing|wish|frustrat|manual|looking for|does anyone|feature request|替代|太贵|缺少/i.test(
+            title,
+          )
+            ? 2
+            : 0;
+        const promotion =
+          /(?:i|we) (?:built|launched|made)|mrr|sign up|boring industries|我做了|上线/i.test(
+            title,
+          )
+            ? 3
+            : 0;
+        return pain - promotion;
+      };
+      const candidates = Array.from(document.querySelectorAll("a[href]"))
+        .filter(visible)
+        .sort((a, b) => score(b) - score(a))
+        .map((a) => {
+          try {
+            const u = new URL(a.getAttribute("href"), location.origin);
+            if (
+              u.origin !== "https://www.reddit.com" ||
+              !new RegExp(
+                "^/r/" + subreddit + "/comments/[a-z0-9]+/",
+                "i",
+              ).test(u.pathname)
+            )
+              return null;
+            return u.origin + u.pathname;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      links = [...new Set([...links, ...candidates])];
+    }
+    return { state: "ready", links };
+  }
   const post = posts.find((p) => p.id === "t3_" + path[2]);
   if (!post) return { state: "loading", links };
   const body = text(document.getElementById(post.id + "-post-rtjson-content"));

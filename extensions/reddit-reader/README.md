@@ -28,3 +28,9 @@
 `npm run test:browser-reader` 检查真实 Chromium 中的 DOM 提取；`npm run test:db` 覆盖配对认证、租约隔离、去重、暂停恢复与雷达接入。现有用户会话读取验证记录在 `.local/reddit-probe/REPORT.md`。这些测试不等同于用户安装后的长期运行验证。
 
 实现参考：[Chrome scripting](https://developer.chrome.com/docs/extensions/reference/api/scripting)、[Service worker events](https://developer.chrome.com/docs/extensions/get-started/tutorial/service-worker-events)。
+
+## 工具痛点搜索（2026-09-18）
+
+新任务搜索近一年的工具替代、价格抱怨、缺失功能及手工工作流，不再只浏览最新帖子。搜索结果按标题线索优先读取用户求助，自荐宣传降权；这只是采集优先级，不代表需求已验证。每社区仍最多读取 6 帖、每帖最多 30 条已渲染评论，未加载内容不计入。
+
+更新代码后，在 Chrome 扩展管理页重新加载本扩展；若状态为暂停，在扩展弹窗点“连接 / 继续”。后端升级不会自动更新已运行的扩展脚本。

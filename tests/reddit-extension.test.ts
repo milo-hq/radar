@@ -44,9 +44,17 @@ test(
           `--load-extension=${extension}`,
         ],
       });
+      const searchRequests: URL[] = [];
       await context.route("https://www.reddit.com/**", (route: any) => {
         const u = new URL(route.request().url()),
           sub = u.pathname.split("/")[2];
+        if (u.pathname === `/r/${sub}/search/`) {
+          searchRequests.push(u);
+          return route.fulfill({
+            contentType: "text/html",
+            body: `<button id="notifications-inbox-button">Inbox</button><a href="/r/${sub}/comments/fixture1/search/">Searching docs takes hours</a>`,
+          });
+        }
         return route.fulfill({
           contentType: "text/html",
           body: `<shreddit-post id="t3_fixture1" post-title="Searching docs takes hours" subreddit-name="${sub}" post-type="text" author="fixture" user-logged-in comment-count="1" permalink="/r/${sub}/comments/fixture1/search/"><div id="t3_fixture1-post-rtjson-content">We cannot find documents and waste two hours each week.</div></shreddit-post><shreddit-comment thingid="t1_reply1" depth="0" postid="t3_fixture1" author="reader"><div id="t1_reply1-post-rtjson-content">We also need better search.</div></shreddit-comment>`,
@@ -100,6 +108,16 @@ test(
           extension: await popup.locator("#status").innerText(),
         }),
       );
+      assert.ok(
+        searchRequests.length > 0,
+        "extension must search rather than browse latest posts",
+      );
+      assert.equal(
+        searchRequests[0].searchParams.get("q"),
+        job.payload.searchQuery,
+      );
+      assert.equal(searchRequests[0].searchParams.get("restrict_sr"), "1");
+      assert.equal(searchRequests[0].searchParams.get("t"), "year");
       assert.equal(job.payload.matchedCount, 2);
       assert.equal(job.payload.capturedThreads, 1);
       const rows = (

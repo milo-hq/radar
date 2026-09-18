@@ -31,3 +31,22 @@ test("rendered reader excludes ads, preserves IDs and ignores collapsed/deleted 
   );
   await page.close();
 });
+
+test("search results discover same-community threads without shreddit-post cards", async () => {
+  const page = await browser.newPage();
+  await page.route("**/*", (r) =>
+    r.fulfill({
+      contentType: "text/html",
+      body: `<button id="notifications-inbox-button">Inbox</button><a href="/r/SaaS/comments/promo/launch/">I built a tool alternative</a><a href="/r/SaaS/comments/abc/tool/">Tool too expensive</a><a href="/r/SaaS/comments/abc/tool/?sort=new">Duplicate</a><a href="/r/other/comments/def/">Other community</a><a href="https://evil.example/r/SaaS/comments/ghi/">Outside</a>`,
+    }),
+  );
+  await page.goto(
+    "https://www.reddit.com/r/SaaS/search/?q=alternative&restrict_sr=1",
+  );
+  const result = await page.evaluate(readRedditPage, { subreddit: "SaaS" });
+  assert.deepEqual(result.links, [
+    "https://www.reddit.com/r/SaaS/comments/abc/tool/",
+    "https://www.reddit.com/r/SaaS/comments/promo/launch/",
+  ]);
+  await page.close();
+});

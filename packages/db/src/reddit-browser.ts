@@ -6,6 +6,14 @@ export const redditCommunities = [
   "Entrepreneur",
   "SideProject",
 ];
+// Search for observed tool friction, not general startup stories.
+export const redditComplaintQueries: Record<string, string> = {
+  SaaS: '("alternative" OR "too expensive" OR "missing feature") (software OR tool)',
+  smallbusiness:
+    '(software OR app) ("frustrating" OR "manual" OR "alternative")',
+  Entrepreneur: '(software OR tool) ("wish" OR "expensive" OR "frustrating")',
+  SideProject: '(tool OR app) ("missing" OR "wish" OR "alternative")',
+};
 export async function enqueueBrowserJobs(c: PoolClient, scanId?: string) {
   const ids: string[] = [];
   for (const subreddit of redditCommunities) {
@@ -16,8 +24,9 @@ export async function enqueueBrowserJobs(c: PoolClient, scanId?: string) {
         source: "reddit",
         transport: "reddit_browser",
         subreddit,
-        query: `r/${subreddit}`,
-        name: `浏览器采集 · r/${subreddit}`,
+        query: redditComplaintQueries[subreddit],
+        searchQuery: redditComplaintQueries[subreddit],
+        name: `工具痛点搜索 · r/${subreddit}`,
         scanId,
         deadlineAt: new Date(Date.now() + 30 * 60_000).toISOString(),
       },

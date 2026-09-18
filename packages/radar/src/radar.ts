@@ -261,7 +261,7 @@ export async function runRadarJob(
     runStructured(
       db,
       provider,
-      { promptName, promptVersion: "v1", model, input },
+      { promptName, promptVersion: "v2", model, input },
       schema,
     );
   if (job.type === "RADAR_ANALYZE") {

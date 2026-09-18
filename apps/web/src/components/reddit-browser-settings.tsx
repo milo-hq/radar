@@ -84,11 +84,11 @@ export function RedditBrowserSettings({
         {c?.last_seen_at ? ` · 最近连接 ${when(c.last_seen_at)}` : ""}
       </p>
       <p className="text-sm leading-6">
-        默认浏览{" "}
+        聚焦工具抱怨与缺失功能，搜索{" "}
         {data?.communities?.map((s: string) => `r/${s}`).join("、") ||
           "4 个相关社区"}
-        ，无需填写主题。每社区最多 6 帖，每帖最多 30
-        条可见评论；部分内容会标注上下文不完整。
+        ，搜索近一年中的替代品、价格不满、手工操作与功能缺口，无需填写主题。每社区最多
+        6 帖，每帖最多 30 条可见评论；部分内容会标注上下文不完整。
       </p>
       <details className="my-3 text-sm">
         <summary className="cursor-pointer">首次安装与连接</summary>
