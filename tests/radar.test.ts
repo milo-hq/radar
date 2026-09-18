@@ -815,3 +815,62 @@ test("online Reddit browser joins each scan and offline browsers are explicitly 
     );
   }
 });
+
+test("extraction rejects seller evidence even when model selects it and preserves concrete buyer requests", async () => {
+  const id = await scan("analyzing");
+  const [doc] = await saveDocuments(db, [
+    {
+      sourceKey: "x",
+      externalId: crypto.randomUUID(),
+      canonicalUrl: "https://x.com/fixture/status/123",
+      type: "post",
+      body: "Actually building software for NPCs. We are capturing body language.\nI use ToolX every week but must merge CSV exports manually.",
+      metadata: { test: true },
+    },
+  ]);
+  const current = await claimed(
+    await job(id, "RADAR_EXTRACT", { documentIds: [doc.id] }),
+  );
+  await runRadarJob(
+    db,
+    current,
+    provider(() => ({ findings: [finding(0), finding(1)] })),
+    model,
+  );
+  const batch = (
+    await db.query("SELECT result FROM radar_batches WHERE job_id=$1", [
+      current.id,
+    ])
+  ).rows[0].result;
+  assert.equal(batch.findings.length, 1);
+  assert.match(batch.findings[0].evidence.quote, /I use ToolX/);
+  assert.equal(batch.rejected.length, 1);
+  assert.match(batch.rejected[0].reason, /供给方/);
+});
+
+test("empty analyzed reports explain evidence filtering rather than claiming collection was empty", async () => {
+  const { id, current } = await reportFixture();
+  await db.query("UPDATE radar_batches SET result=$2 WHERE scan_id=$1", [
+    id,
+    JSON.stringify({
+      findings: [],
+      rejected: [{ reason: "供给方产品描述或宣传" }],
+    }),
+  ]);
+  await db.query(
+    "UPDATE radar_scans SET coverage=coverage||'{\"analyzed\":1}'::jsonb WHERE id=$1",
+    [id],
+  );
+  await runRadarJob(
+    db,
+    current,
+    provider(() => {
+      throw Error("No model needed");
+    }),
+    model,
+  );
+  const report = (await state(id)).report;
+  assert.match(report.rejectedSummary, /已分析 1/);
+  assert.match(report.rejectedSummary, /供给方/);
+  assert.doesNotMatch(report.rejectedSummary, /采集为空/);
+});

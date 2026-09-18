@@ -536,6 +536,12 @@ export function WorkspaceRadar({
               </div>
             </>
           )}
+          {(scan.plan as any)?.reanalysisOf && (
+            <p className="ws-muted">
+              本轮使用历史原文重新分析，没有新增采集。原轮次：
+              {(scan.plan as any).reanalysisOf}
+            </p>
+          )}
           {(scan.plan as any)?.redditBrowser && (
             <p className="ws-muted">
               Reddit：{(scan.plan as any).redditBrowser.reason}

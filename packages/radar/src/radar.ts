@@ -8,7 +8,7 @@ import {
   extractionBatches,
   crawlerSites,
 } from "./data-engine.js";
-import { publishReviewedReport } from "./quality.js";
+import { publishReviewedReport, demandEvidenceBlocker } from "./quality.js";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { transaction } from "../../db/src/index.js";
@@ -118,7 +118,12 @@ export async function startScan(db: Pool) {
     return scan.id as string;
   });
 }
-async function emptyReport(c: PoolClient, id: string, coverage: any) {
+async function emptyReport(
+  c: PoolClient,
+  id: string,
+  coverage: any,
+  reasons: string[] = [],
+) {
   await c.query(
     "UPDATE radar_scans SET status='complete',coverage=$2,report=$3,updated_at=now() WHERE id=$1",
     [
@@ -128,7 +133,9 @@ async function emptyReport(c: PoolClient, id: string, coverage: any) {
         summary: "本轮没有足够的未解决需求证据，暂不推荐开发。",
         recommendations: [],
         rejectedSummary:
-          "采集为空、内容重复或问题已有解答。可以启动下一轮探索其他方向；渠道失败情况见采集覆盖。",
+          coverage.analyzed > 0
+            ? `已分析 ${coverage.analyzed} 份材料，未保留具备直接使用者痛点依据的候选。${[...new Set(reasons)].join("；")}。这不代表没有市场，需要补充具体工具的使用者抱怨与未解决请求。`
+            : "本轮没有可纳入分析的原文，具体采集、重复、排除和失败数量见覆盖统计。",
       }),
     ],
   );
@@ -262,7 +269,18 @@ export async function runRadarJob(
     runStructured(
       db,
       provider,
-      { promptName, promptVersion: "v2", model, input },
+      {
+        promptName,
+        promptVersion: [
+          "radar-extract",
+          "radar-audit",
+          "radar-report",
+        ].includes(promptName)
+          ? "v3"
+          : "v2",
+        model,
+        input,
+      },
       schema,
     );
   if (job.type === "RADAR_ANALYZE") {
@@ -442,8 +460,19 @@ export async function runRadarJob(
         )
         .map((d) => d.id),
     );
+    const rejected = value.findings.flatMap((f) => {
+      const evidence = lines[f.sourceLine];
+      const reason = productIds.has(evidence.documentId)
+        ? "官网/目录不能作为需求证据"
+        : demandEvidenceBlocker(evidence.quote);
+      return reason ? [{ evidence, reason }] : [];
+    });
     const findings = value.findings
-      .filter((f) => !productIds.has(lines[f.sourceLine].documentId))
+      .filter(
+        (f) =>
+          !productIds.has(lines[f.sourceLine].documentId) &&
+          !demandEvidenceBlocker(lines[f.sourceLine].quote),
+      )
       .map((f, index) => ({
         ...f,
         id: `${job.id}:${index}`,
@@ -452,7 +481,7 @@ export async function runRadarJob(
     await save(db, job, async (c) => {
       await c.query(
         "INSERT INTO radar_batches(job_id,scan_id,result) VALUES($1,$2,$3)",
-        [job.id, job.payload.scanId, JSON.stringify({ findings })],
+        [job.id, job.payload.scanId, JSON.stringify({ findings, rejected })],
       );
     });
     return;
@@ -468,9 +497,20 @@ export async function runRadarJob(
       [job.payload.scanId],
     )
   ).rows;
-  const findings = batches.flatMap((b) => b.result.findings);
+  const findings = batches
+    .flatMap((b) => b.result.findings)
+    .filter((f) => !demandEvidenceBlocker(f.evidence.quote));
   if (!findings.length) {
-    await save(db, job, async (c) => emptyReport(c, scan.id, scan.coverage));
+    await save(db, job, async (c) =>
+      emptyReport(
+        c,
+        scan.id,
+        scan.coverage,
+        batches.flatMap((b) =>
+          (b.result.rejected ?? []).map((r: any) => r.reason),
+        ),
+      ),
+    );
     return;
   }
   const ids = findings.map((f) => f.id) as [string, ...string[]];
