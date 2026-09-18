@@ -108,7 +108,7 @@ export async function startScan(db: Pool) {
     if (active) return active.id as string;
     const scan = (
       await c.query(
-        "INSERT INTO radar_scans(status) VALUES('planning') RETURNING id",
+        "INSERT INTO radar_scans(status,plan) VALUES('planning','{\"kind\":\"full\"}') RETURNING id",
       )
     ).rows[0];
     await enqueue(

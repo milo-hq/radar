@@ -124,11 +124,9 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
       if (active.length) {
         const sameSource = active.filter((j) => j.source === source);
         if (!sameSource.length)
-          return reply
-            .code(409)
-            .send({
-              error: "另一来源正在采集，请等当前浏览器任务完成后再启动",
-            });
+          return reply.code(409).send({
+            error: "另一来源正在采集，请等当前浏览器任务完成后再启动",
+          });
         return { jobIds: sameSource.map((j) => j.id) };
       }
       const scan = (
@@ -136,6 +134,7 @@ export function registerRedditBrowser(app: FastifyInstance, db: Pool) {
           "INSERT INTO radar_scans(status,plan) VALUES('collecting',$1) RETURNING id",
           [
             JSON.stringify({
+              kind: source,
               [source === "x" ? "xBrowser" : "redditBrowser"]: {
                 included: true,
                 reason: "浏览器专项采集",

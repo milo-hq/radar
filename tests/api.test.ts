@@ -411,3 +411,118 @@ test("radar history validates filters and returns filtered counts with bounded p
     await db.query("DELETE FROM radar_scans WHERE id=ANY($1::uuid[])", [ids]);
   }
 });
+
+test("specialist scans and reanalysis cannot replace the full discovery dashboard", async () => {
+  const ids: string[] = [];
+  try {
+    for (const [i, plan] of [
+      {},
+      { xBrowser: { included: true, reason: "浏览器专项采集" } },
+      { redditBrowser: { included: true, reason: "浏览器专项采集" } },
+      { reanalysisOf: "original" },
+    ].entries()) {
+      const row = (
+        await db.query(
+          "INSERT INTO radar_scans(status,plan,created_at,report) VALUES('complete',$1,now()+($2::int * interval '1 second'),$3) RETURNING id",
+          [
+            JSON.stringify(plan),
+            3600 + i,
+            JSON.stringify({
+              recommendations: [],
+              summary: "fixture",
+              rejectedSummary: "",
+            }),
+          ],
+        )
+      ).rows[0];
+      ids.push(row.id);
+    }
+    const state = (await app.inject("/api/radar")).json();
+    assert.equal(state.latest.id, ids[0]);
+    assert.equal(state.previous.id, ids[0]);
+    assert.equal(state.latest.kind, "full");
+    for (const [index, kind] of [
+      "full",
+      "x",
+      "reddit",
+      "reanalysis",
+    ].entries()) {
+      const detail = (
+        await app.inject("/api/radar/history/" + ids[index])
+      ).json();
+      assert.equal(detail.scan.kind, kind);
+    }
+    const history = (await app.inject("/api/radar/history?limit=10")).json();
+    assert.equal(
+      history.items.find((r: any) => r.id === ids[3]).kind,
+      "reanalysis",
+    );
+    await db.query(
+      "UPDATE radar_scans SET status='analyzing',report=null WHERE id=$1",
+      [ids[3]],
+    );
+    const active = (await app.inject("/api/radar")).json();
+    assert.equal(active.latest.id, ids[0]);
+    assert.equal(active.active.id, ids[3]);
+  } finally {
+    await db.query("DELETE FROM radar_scans WHERE id=ANY($1::uuid[])", [ids]);
+  }
+});
+
+test("collecting scans expose saved source counts without counting duplicate job links twice", async () => {
+  const { saveDocuments } = await import("../packages/db/src/repository.js");
+  const { enqueue } = await import("../packages/db/src/jobs.js");
+  const [doc] = await saveDocuments(db, [
+    {
+      sourceKey: "x",
+      externalId: crypto.randomUUID(),
+      canonicalUrl: "https://x.com/fixture/status/123",
+      type: "post",
+      body: "Fixture collecting progress " + crypto.randomUUID(),
+      metadata: { test: true },
+    },
+  ]);
+  const scan = (
+    await db.query(
+      "INSERT INTO radar_scans(status) VALUES('collecting') RETURNING id",
+    )
+  ).rows[0];
+  const jobIds: string[] = [];
+  try {
+    for (let i = 0; i < 2; i++) {
+      const job = await enqueue(
+        db,
+        "DISCOVER_TOPIC",
+        { scanId: scan.id, source: "x" },
+        crypto.randomUUID(),
+      );
+      jobIds.push(job.id);
+      await db.query(
+        "INSERT INTO discovery_documents(job_id,document_id) VALUES($1,$2)",
+        [job.id, doc.id],
+      );
+    }
+    const detail = (await app.inject("/api/radar/history/" + scan.id)).json()
+      .scan;
+    assert.deepEqual(detail.liveCollection, {
+      total: 1,
+      sourceCounts: { x: 1 },
+    });
+    assert.deepEqual(detail.coverage, {});
+    await db.query("UPDATE radar_scans SET status='complete' WHERE id=$1", [
+      scan.id,
+    ]);
+    assert.equal(
+      (await app.inject("/api/radar/history/" + scan.id)).json().scan
+        .liveCollection,
+      undefined,
+    );
+  } finally {
+    await db.query(
+      "DELETE FROM discovery_documents WHERE job_id=ANY($1::uuid[])",
+      [jobIds],
+    );
+    await db.query("DELETE FROM jobs WHERE id=ANY($1::uuid[])", [jobIds]);
+    await db.query("DELETE FROM radar_scans WHERE id=$1", [scan.id]);
+  }
+});

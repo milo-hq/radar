@@ -1,3 +1,4 @@
+import { scanKindSql } from "../../../packages/db/src/scan-kind.js";
 import { z } from "zod";
 import { crawlerSites } from "../../../packages/radar/src/data-engine.js";
 import type { FastifyInstance } from "fastify";
@@ -5,6 +6,24 @@ import type { Pool } from "pg";
 import { startScan } from "../../../packages/radar/src/radar.js";
 import { translationConfig } from "../../../packages/llm/src/compatible.js";
 export function registerRadar(app: FastifyInstance, db: Pool) {
+  async function attachLiveCollection(scan: any) {
+    if (!scan || scan.status !== "collecting") return;
+    const rows = (
+      await db.query(
+        `SELECT d.source_id, count(DISTINCT d.id)::int AS count
+       FROM discovery_documents dd JOIN jobs j ON j.id=dd.job_id
+       JOIN raw_documents d ON d.id=dd.document_id
+       WHERE j.payload->>'scanId'=$1 GROUP BY d.source_id`,
+        [scan.id],
+      )
+    ).rows;
+    scan.liveCollection = {
+      total: rows.reduce((n, row) => n + row.count, 0),
+      sourceCounts: Object.fromEntries(
+        rows.map((row) => [row.source_id, row.count]),
+      ),
+    };
+  }
   const configured = () => {
     try {
       return !!translationConfig();
@@ -25,7 +44,7 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
     const latest =
       (
         await db.query(
-          "SELECT * FROM radar_scans ORDER BY created_at DESC LIMIT 1",
+          `SELECT *, ${scanKindSql} AS kind FROM radar_scans WHERE (${scanKindSql})='full' ORDER BY created_at DESC LIMIT 1`,
         )
       ).rows[0] ?? null;
     if (latest)
@@ -38,10 +57,17 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
     const previous =
       (
         await db.query(
-          "SELECT * FROM radar_scans WHERE status='complete' ORDER BY created_at DESC LIMIT 1",
+          `SELECT *, ${scanKindSql} AS kind FROM radar_scans WHERE status='complete' AND (${scanKindSql})='full' ORDER BY created_at DESC LIMIT 1`,
         )
       ).rows[0] ?? null;
-    return { configured: configured(), latest, previous };
+    const active =
+      (
+        await db.query(
+          `SELECT id,status,${scanKindSql} AS kind FROM radar_scans WHERE status NOT IN ('complete','failed') ORDER BY created_at DESC LIMIT 1`,
+        )
+      ).rows[0] ?? null;
+    await attachLiveCollection(latest);
+    return { configured: configured(), latest, previous, active };
   });
   app.get("/api/radar/history", async (request, reply) => {
     const parsed = z
@@ -79,7 +105,7 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
     const direction = order === "asc" ? "ASC" : "DESC";
     const [page, count] = await Promise.all([
       db.query(
-        `SELECT id,status,created_at,updated_at,coverage,
+        `SELECT id,status,created_at,updated_at,coverage,${scanKindSql} AS kind,
       CASE WHEN report IS NULL THEN NULL ELSE jsonb_array_length(COALESCE(report->'recommendations','[]'::jsonb)) END AS opportunity_count
       FROM radar_scans ${where} ORDER BY created_at ${direction},id ${direction} LIMIT $4 OFFSET $5`,
         [status, q, search, limit + 1, offset],
@@ -103,7 +129,10 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
     if (!parsed.success)
       return reply.code(400).send({ error: "无效的发现记录编号" });
     const scan = (
-      await db.query("SELECT * FROM radar_scans WHERE id=$1", [parsed.data.id])
+      await db.query(
+        `SELECT *, ${scanKindSql} AS kind FROM radar_scans WHERE id=$1`,
+        [parsed.data.id],
+      )
     ).rows[0];
     if (!scan) return reply.code(404).send({ error: "发现记录不存在" });
     scan.jobs = (
@@ -112,6 +141,7 @@ export function registerRadar(app: FastifyInstance, db: Pool) {
         [scan.id],
       )
     ).rows;
+    await attachLiveCollection(scan);
     return { scan };
   });
   app.post("/api/radar", async (_r, reply) => {

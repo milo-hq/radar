@@ -36,6 +36,7 @@ try {
         "INSERT INTO radar_scans(status,plan,coverage) VALUES('analyzing',$1,$2) RETURNING id,status",
         [
           JSON.stringify({
+            kind: "reanalysis",
             reanalysisOf: original,
             evidencePolicy: "context-v2",
             note: "使用历史原文重新分析，没有新增采集",

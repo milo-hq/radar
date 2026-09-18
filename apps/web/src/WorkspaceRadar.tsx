@@ -8,7 +8,7 @@ import {
 } from "./components/ui/table";
 import { Button } from "./components/ui/button";
 import { DataTable } from "./components/data-table";
-import { RadarHistory } from "./RadarHistory";
+import { RadarHistory, scanKindLabels } from "./RadarHistory";
 import { useEffect, useState } from "react";
 import {
   Plus,
@@ -76,6 +76,7 @@ type RadarAnalytics = {
 };
 type Scan = {
   id: string;
+  kind: string;
   status:
     | "planning"
     | "collecting"
@@ -86,6 +87,7 @@ type Scan = {
   created_at: string;
   updated_at: string;
   analytics?: RadarAnalytics | null;
+  liveCollection?: { total: number; sourceCounts: Record<string, number> };
   plan: {
     queries: { query: string; reason: string }[];
     toolTargets?: { product: string; focus: string }[];
@@ -116,6 +118,7 @@ type RadarState = {
   configured: boolean;
   latest: Scan | null;
   previous?: Scan | null;
+  active?: Pick<Scan, "id" | "status" | "kind"> | null;
 };
 const stages = [
   { id: "planning", title: "规划搜索", detail: "自动选择值得探索的需求方向" },
@@ -248,7 +251,7 @@ export function WorkspaceRadar({
     setRefresh((n) => n + 1);
   };
   const scan = selectedId ? selectedScan : data?.latest;
-  const latestRunning = isActive(data?.latest);
+  const latestRunning = !!data?.active;
   const running = isActive(scan);
   const reportScan = selectedId ? scan : scan?.report ? scan : previousReport;
   const report = reportScan?.report;
@@ -293,6 +296,23 @@ export function WorkspaceRadar({
               : "自动发现机会"}
         </Button>
       </section>
+      <p className="ws-muted">
+        首页默认展示全渠道发现。单来源专项和重分析保留在历史中，不会替换全渠道报告。每轮报告最多推荐
+        5 项，不代表全部可做机会。
+      </p>
+      {data?.active && data.active.kind !== "full" && (
+        <p role="status">
+          {scanKindLabels[data.active.kind]}正在运行。
+          <Button variant="link" onClick={() => selectScan(data.active!.id)}>
+            查看专项进度
+          </Button>
+        </p>
+      )}
+      {scan && scan.kind !== "full" && (
+        <p className="ws-muted">
+          当前查看：{scanKindLabels[scan.kind]}。这不是全渠道扫描结果。
+        </p>
+      )}
       <RadarHistory
         revision={revision + refresh}
         selectedId={selectedId}
@@ -506,7 +526,10 @@ export function WorkspaceRadar({
             <>
               <div className="ws-coverage-grid ws-radar-coverage">
                 {[
-                  ["采集信号", scan.coverage.collected],
+                  [
+                    "采集信号",
+                    scan.liveCollection?.total ?? scan.coverage.collected,
+                  ],
                   ["纳入分析", scan.coverage.eligible],
                   ["已分析", scan.coverage.analyzed],
                   ["已排除", scan.coverage.excluded],
@@ -514,7 +537,9 @@ export function WorkspaceRadar({
                   ["失败任务", scan.coverage.failedJobs],
                 ].map(([label, value]) => (
                   <div key={label}>
-                    <strong>{value ?? 0}</strong>
+                    <strong>
+                      {value ?? (scan.status === "collecting" ? "—" : 0)}
+                    </strong>
                     <small>{label}</small>
                   </div>
                 ))}
@@ -528,14 +553,21 @@ export function WorkspaceRadar({
                 模型提取每篇前 4000
                 字符，可能缺少完整后续讨论；搜索命中不等于需求成立。
               </p>
+              {scan.liveCollection && (
+                <p className="ws-muted">
+                  采集中：显示已入库材料数；采集结束后统一去重、筛选和分析。
+                </p>
+              )}
               <div className="ws-radar-sources">
-                {Object.entries(scan.coverage.sourceCounts ?? {}).map(
-                  ([source, count]) => (
-                    <span className="ws-tag" key={source}>
-                      {source} · {count}
-                    </span>
-                  ),
-                )}
+                {Object.entries(
+                  scan.liveCollection?.sourceCounts ??
+                    scan.coverage.sourceCounts ??
+                    {},
+                ).map(([source, count]) => (
+                  <span className="ws-tag" key={source}>
+                    {source} · {count}
+                  </span>
+                ))}
               </div>
             </>
           )}
@@ -634,7 +666,7 @@ export function WorkspaceRadar({
               <p>推荐是待验证的判断，排序依据与证据见每张卡片。</p>
             </div>
             <span className="ws-tag">
-              {report.recommendations.length} 个建议
+              {report.recommendations.length} 个建议（本轮最多 5 项）
             </span>
           </div>
           <p className="ws-radar-summary">{report.summary}</p>

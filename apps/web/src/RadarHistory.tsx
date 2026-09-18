@@ -22,11 +22,18 @@ import {
 type Entry = {
   id: string;
   status: string;
+  kind: string;
   created_at: string;
   opportunity_count: number | null;
   coverage: { collected?: number } | null;
 };
 type HistoryPage = { items: Entry[]; hasMore: boolean; total: number };
+export const scanKindLabels: Record<string, string> = {
+  full: "全渠道发现",
+  x: "X 专项",
+  reddit: "Reddit 专项",
+  reanalysis: "历史重分析",
+};
 const labels: Record<string, string> = {
   planning: "规划中",
   collecting: "采集中",
@@ -109,11 +116,11 @@ export function RadarHistory({
         <div>
           <h2 className="text-lg font-semibold tracking-tight">发现历史</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            查找并回看每轮发现的结果。
+            全渠道、单来源专项和历史重分析分别标注，结果数量不可直接比较。
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => onSelect(null)}>
-          查看最新一轮
+          查看最新全渠道
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -183,6 +190,7 @@ export function RadarHistory({
           <TableHeader>
             <TableRow>
               <TableHead>发现时间</TableHead>
+              <TableHead>范围</TableHead>
               <TableHead>状态</TableHead>
               <TableHead className="text-right">机会数</TableHead>
               <TableHead className="text-right">采集篇数</TableHead>
@@ -193,7 +201,7 @@ export function RadarHistory({
             {loading ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="h-28 text-center text-muted-foreground"
                   role="status"
                 >
@@ -202,7 +210,7 @@ export function RadarHistory({
               </TableRow>
             ) : error && !data ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-28 text-center">
+                <TableCell colSpan={6} className="h-28 text-center">
                   <span role="alert" className="text-destructive">
                     {error}
                   </span>
@@ -218,7 +226,7 @@ export function RadarHistory({
             ) : !data?.items.length ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="h-28 text-center text-muted-foreground"
                 >
                   {search || status !== "all"
@@ -246,6 +254,9 @@ export function RadarHistory({
                       </time>
                     </TableCell>
                     <TableCell>
+                      {scanKindLabels[item.kind] ?? "未知范围"}
+                    </TableCell>
+                    <TableCell>
                       <Badge
                         variant={
                           item.status === "failed"
@@ -262,7 +273,8 @@ export function RadarHistory({
                       {item.opportunity_count ?? "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {item.coverage?.collected ?? 0}
+                      {item.coverage?.collected ??
+                        (item.status === "collecting" ? "统计中" : "—")}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
