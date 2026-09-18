@@ -13,13 +13,13 @@ export function publicationBlocker(r: {
   )
     return "依赖机构采购与专业合规，不能作为普通独立开发者首选";
   if (
-    /端到端|全流程|全自动主导|多场景.*RPA|跨系统流程自动适配|大而全/i.test(
+    /端到端|全流程|全自动主导|多场景.*RPA|跨系统流程自动适配|大而全|企业业务智能分析平台|集成多业务数据源的智能分析平台|自动连接所有业务系统/i.test(
       r.title + r.solution,
     )
   )
     return "产品范围过大，尚未收敛为可独立交付的窄工具";
   if (
-    /市场空白|无成熟.*方案|没有竞品|现有方案均无法|付费意愿高|强烈需求|需求强烈|多行业存在明显需求|市场空间较大|市场潜力大|唯一性强|普遍反映|证明需求存在|明显竞争差异化|用户愿为.*付费/.test(
+    /市场缺口明显|市场无明显|市场未见|市场缺乏|市场空白|无成熟.*方案|没有竞品|现有方案均无法|付费意愿高|强烈需求|需求强烈|多行业存在明显需求|市场空间较大|市场潜力大|唯一性强|普遍反映|证明需求存在|明显竞争差异化|用户愿为.*付费/.test(
       r.whyPriority + r.problem,
     )
   )
@@ -51,6 +51,13 @@ export function publishReviewedReport<
 
 /** Conservative lexical tripwire, not a general classifier. Model review still applies. */
 export function demandEvidenceBlocker(quote: string) {
+  if (
+    /\bfounder\b[\s\S]{0,40}\b(?:needed|searched|couldn.t find)\b|创始人当年|创业故事/i.test(
+      quote,
+    )
+  )
+    return "产品创立历史不能证明当前缺口仍未解决";
+
   if (
     /\b(?:comments?|customers?|users?|people)\b[\s\S]{0,80}\b(?:said|told|reported|complained)\b|\bboth said\b|用户反馈说|客户告诉我|评论说/i.test(
       quote,

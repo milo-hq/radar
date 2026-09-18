@@ -1,3 +1,4 @@
+import { ensureToolTargets } from "../packages/db/src/tool-search.js";
 import { test, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
@@ -351,21 +352,26 @@ test("extraction rejects invented source lines and report rejects invented IDs b
   assert.deepEqual(result.report.recommendations[0].platforms, ["github"]);
 });
 
-test("lease lost during model generation cannot publish a plan or mark the stale attempt successful", async () => {
+test("lease lost during site lookup cannot publish a plan or mark the stale attempt successful", async () => {
   const id = await scan("planning");
   const current = await claimed(await job(id, "RADAR_PLAN"));
   await assert.rejects(
     runRadarJob(
       db,
       current,
-      provider(async () => {
-        await db.query(
-          "UPDATE jobs SET lock_token=gen_random_uuid() WHERE id=$1",
-          [current.id],
-        );
-        return plan;
+      provider(() => {
+        throw Error("Planning must not call the model");
       }),
       model,
+      {
+        sites: async () => {
+          await db.query(
+            "UPDATE jobs SET lock_token=gen_random_uuid() WHERE id=$1",
+            [current.id],
+          );
+          return [];
+        },
+      },
     ),
     /租约/,
   );
@@ -791,6 +797,43 @@ test("online Reddit browser joins each scan and offline browsers are explicitly 
       4,
     );
     assert.equal((await state(withX)).plan.xBrowser.included, true);
+    const storedPlan = (await state(withX)).plan;
+    const products = storedPlan.toolTargets
+      .map((t: { product: string }) => t.product)
+      .sort();
+    assert.equal(products.length, 4);
+    const browserJobs = (await jobs(withX, "DISCOVER_TOPIC")).filter(
+      (j) => j.payload.transport === "reddit_browser",
+    );
+    for (const source of ["reddit", "x"]) {
+      const sourceJobs = browserJobs.filter((j) => j.payload.source === source);
+      assert.deepEqual(
+        sourceJobs.map((j) => j.payload.referenceTool).sort(),
+        products,
+      );
+      for (const j of sourceJobs)
+        assert.ok(j.payload.searchQuery.includes(j.payload.referenceTool));
+    }
+    assert.deepEqual(
+      storedPlan.queries.map((q: { query: string }) => q.query),
+      storedPlan.toolTargets.map(
+        (t: { product: string; focus: string }) => t.product + " " + t.focus,
+      ),
+    );
+    const client = await db.connect();
+    try {
+      assert.deepEqual(
+        await ensureToolTargets(client, withX),
+        storedPlan.toolTargets,
+      );
+    } finally {
+      client.release();
+    }
+    assert.notDeepEqual(
+      storedPlan.toolTargets,
+      (await state(id)).plan.toolTargets,
+    );
+
     await db.query(
       "UPDATE reddit_browser_connection SET enabled=false,x_enabled=false WHERE id",
     );

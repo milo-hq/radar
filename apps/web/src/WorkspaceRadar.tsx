@@ -86,7 +86,10 @@ type Scan = {
   created_at: string;
   updated_at: string;
   analytics?: RadarAnalytics | null;
-  plan: { queries: { query: string; reason: string }[] } | null;
+  plan: {
+    queries: { query: string; reason: string }[];
+    toolTargets?: { product: string; focus: string }[];
+  } | null;
   coverage: {
     collected: number;
     eligible: number;
@@ -549,6 +552,13 @@ export function WorkspaceRadar({
           )}
           {(scan.plan as any)?.xBrowser && (
             <p className="ws-muted">X：{(scan.plan as any).xBrowser.reason}</p>
+          )}
+          {!!scan.plan?.toolTargets?.length && (
+            <p className="ws-muted">
+              本轮参考工具：
+              {scan.plan.toolTargets.map((t) => t.product).join("、")}。
+              从预设工具库轮换选取，寻找使用者抱怨、缺失功能和替代需求；列入搜索不代表已发现机会。
+            </p>
           )}
           {!!scan.plan?.queries?.length && (
             <details className="ws-radar-plan">

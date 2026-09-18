@@ -1,3 +1,4 @@
+import { ensureToolTargets, productQuery } from "../../db/src/tool-search.js";
 import {
   enqueueBrowserJobs,
   enqueueXBrowserJobs,
@@ -307,25 +308,6 @@ export async function runRadarJob(
     return;
   }
   if (job.type === "RADAR_PLAN") {
-    const previous = (
-      await db.query(
-        "SELECT plan FROM radar_scans WHERE id<>$1 ORDER BY created_at DESC LIMIT 8",
-        [job.payload.scanId],
-      )
-    ).rows;
-    const founder =
-      (await db.query("SELECT profile FROM founder_profiles WHERE id=1"))
-        .rows[0]?.profile ?? {};
-    const { value } = await run(
-      "radar-plan",
-      {
-        preferences,
-        founder,
-        previous,
-        currentDate: new Date().toISOString().slice(0, 10),
-      },
-      planSchema,
-    );
     if (
       !(
         await db.query(
@@ -339,6 +321,14 @@ export async function runRadarJob(
       (site) => site.enabled,
     );
     await save(db, job, async (c) => {
+      const targets = await ensureToolTargets(c, job.payload.scanId);
+      // Keep each channel on the same product instead of allowing generic model queries.
+      const value = {
+        queries: targets.map((t) => ({
+          query: productQuery(t, "general"),
+          reason: `核对 ${t.product} 的 ${t.focus} 相关使用限制、替代需求和手工绕行；缺口尚待原文验证。`,
+        })),
+      };
       const browserConnection = (
         await c.query(
           "SELECT id,x_enabled FROM reddit_browser_connection WHERE id AND enabled AND pause_reason IS NULL AND last_seen_at>now()-interval '90 seconds'",
@@ -399,7 +389,7 @@ export async function runRadarJob(
           ]);
         }
       await c.query(
-        "UPDATE radar_scans SET status='collecting',plan=$2,updated_at=now() WHERE id=$1",
+        "UPDATE radar_scans SET status='collecting',plan=plan||$2::jsonb,updated_at=now() WHERE id=$1",
         [
           job.payload.scanId,
           JSON.stringify({ ...value, websites, redditBrowser, xBrowser }),
